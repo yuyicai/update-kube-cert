@@ -225,6 +225,9 @@ main() {
       CA_KEY=${PKI_PATH}/ca.key
       update_etcd_cert
 
+      docker ps | grep etcd| awk '{print $1}' | xargs -r -I '{}' docker restart {} || true
+      log_info "restarted etcd"
+      sleep 5
       docker ps | grep kube-apiserver | awk '{print $1}' | xargs -I '{}' docker restart {} || true
       log_info "restarted kube-apiserver"
       sleep 5
