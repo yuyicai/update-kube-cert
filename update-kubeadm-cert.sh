@@ -27,7 +27,7 @@ check_file() {
 get_subject_alt_name() {
   local cert=${PKI_PATH}/$1.crt
   check_file "${cert}"
-  local alt_name=$(openssl x509 -ext subjectAltName -noout -in ${cert} | tail -n1 | sed 's/ *Address//g')
+  local alt_name=$(openssl x509 -text -noout -in ${cert} | grep -A1 'Alternative' | tail -n1 | sed 's/ *Address//g')
   printf "${alt_name}\n"
 }
 
