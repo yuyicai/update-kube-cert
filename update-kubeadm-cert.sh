@@ -176,7 +176,7 @@ cert::update_etcd_cert() {
   cert::gen_cert "${CART_NAME}" "client" "/O=system:masters/CN=kube-apiserver-etcd-client" "${CAER_DAYS}"
 
   # restart etcd
-  docker ps | grep etcd| awk '{print $1}' | xargs -r -I '{}' docker restart {} || true
+  docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} || true
   log::info "restarted etcd"
 }
 
@@ -215,15 +215,15 @@ cert::update_master_cert() {
   CART_NAME=${PKI_PATH}/front-proxy-client
   cert::gen_cert "${CART_NAME}" "client" "/CN=front-proxy-client" "${CAER_DAYS}"
 
-  # restart apiserve, controller-manager and scheduler
-  docker ps | grep kube-apiserver | awk '{print $1}' | xargs -I '{}' docker restart {} || true
+  # restart apiserve, controller-manager, scheduler and kubelet
+  docker ps | awk '/k8s_kube-apiserver/{print$1}' | xargs -r -I '{}' docker restart {} || true
   log::info "restarted kube-apiserver"
-  sleep 5
-  docker ps | grep kube-controller-manager | awk '{print $1}' | xargs -r -I '{}' docker restart {} || true
+  docker ps | awk '/k8s_kube-controller-manager/{print$1}' | xargs -r -I '{}' docker restart {} || true
   log::info "restarted kube-controller-manager"
-  sleep 1
-  docker ps | grep kube-scheduler | awk '{print $1}' | xargs -r -I '{}' docker restart {} || true
+  docker ps | awk '/k8s_kube-scheduler/{print$1}' | xargs -r -I '{}' docker restart {} || true
   log::info "restarted kube-scheduler"
+  systemctl restart kubelet
+  log::info "restarted kubelet"
 }
 
 main() {
