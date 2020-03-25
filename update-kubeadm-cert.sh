@@ -41,8 +41,8 @@ cert::get_subj() {
 
 cert::backup_file() {
   local file=${1}
-  if [[ ! -f ${file}.old-$(date +%Y%m%d) ]]; then
-    cp -p ${file} ${file}.old-$(date +%Y%m%d)
+  if [[ ! -e ${file}.old-$(date +%Y%m%d) ]]; then
+    cp -rp ${file} ${file}.old-$(date +%Y%m%d)
     log::info "backup ${file} to ${file}.old-$(date +%Y%m%d)"
   else
     log::warning "does not backup, ${file}.old-$(date +%Y%m%d) already exists"
@@ -71,10 +71,10 @@ cert::gen_cert() {
   check_file "${cert}"
 
   # backup certificate when certificate not in ${kubeconf_arr[@]}
-  kubeconf_arr=("controller-manager.crt" "scheduler.crt" "admin.crt" "kubelet.crt")
-  if [[ ! "${kubeconf_arr[@]}" =~ "${cert##*/}" ]]; then
-    cert::backup_file "${cert}"
-  fi
+  # kubeconf_arr=("controller-manager.crt" "scheduler.crt" "admin.crt" "kubelet.crt")
+  # if [[ ! "${kubeconf_arr[@]}" =~ "${cert##*/}" ]]; then
+  #   cert::backup_file "${cert}"
+  # fi
 
   case "${cert_type}" in
     client)
@@ -125,7 +125,7 @@ cert::update_kubeconf() {
   local cert_base64=$(base64 -w 0 ${cert})
 
   # backup kubeconf
-  cert::backup_file "${kubeconf_file}"
+  # cert::backup_file "${kubeconf_file}"
 
   # set certificate base64 code to kubeconf
   sed -i 's/client-certificate-data:.*/client-certificate-data: '${cert_base64}'/g' ${kubeconf_file}
@@ -143,7 +143,7 @@ cert::update_kubeconf() {
 }
 
 cert::update_etcd_cert() {
-  PKI_PATH=/etc/kubernetes/pki/etcd
+  PKI_PATH=${KUBE_PATH}/pki/etcd
   CA_CERT=${PKI_PATH}/ca.crt
   CA_KEY=${PKI_PATH}/ca.key
 
@@ -171,7 +171,7 @@ cert::update_etcd_cert() {
   # /etc/kubernetes/pki/apiserver-etcd-client
   check_file "${CA_CERT}"
   check_file "${CA_KEY}"
-  PKI_PATH=/etc/kubernetes/pki
+  PKI_PATH=${KUBE_PATH}/pki
   CART_NAME=${PKI_PATH}/apiserver-etcd-client
   cert::gen_cert "${CART_NAME}" "client" "/O=system:masters/CN=kube-apiserver-etcd-client" "${CAER_DAYS}"
 
@@ -181,7 +181,7 @@ cert::update_etcd_cert() {
 }
 
 cert::update_master_cert() {
-  PKI_PATH=/etc/kubernetes/pki
+  PKI_PATH=${KUBE_PATH}/pki
   CA_CERT=${PKI_PATH}/ca.crt
   CA_KEY=${PKI_PATH}/ca.key
 
@@ -200,11 +200,21 @@ cert::update_master_cert() {
   cert::gen_cert "${CART_NAME}" "client" "/O=system:masters/CN=kube-apiserver-kubelet-client" "${CAER_DAYS}"
 
   # generate kubeconf for controller-manager,scheduler,kubectl and kubelet
-  # /etc/kubernetes/controller-manager,scheduler,admin,kubelet
+  # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
   cert::update_kubeconf "${KUBE_PATH}/controller-manager"
   cert::update_kubeconf "${KUBE_PATH}/scheduler"
   cert::update_kubeconf "${KUBE_PATH}/admin"
-  cert::update_kubeconf "${KUBE_PATH}/kubelet"
+  # check kubelet.conf
+  # https://github.com/kubernetes/kubeadm/issues/1753
+  set +e
+  grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf > /dev/null 2>&1
+  kubelet_cert_auto_update=$?
+  set -e
+  if [[ "$kubelet_cert_auto_update" == "0" ]]; then
+    log::warning "does not need to update kubelet.conf"
+  else
+    cert::update_kubeconf "${KUBE_PATH}/kubelet"
+  fi
 
   # generate front-proxy-client certificate
   # use front-proxy-client ca
@@ -231,6 +241,9 @@ main() {
   
   KUBE_PATH=/etc/kubernetes
   CAER_DAYS=3650
+
+  # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+  cert::backup_file "${KUBE_PATH}"
 
   case ${node_tpye} in
     etcd)

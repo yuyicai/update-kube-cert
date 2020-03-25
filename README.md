@@ -1,26 +1,26 @@
+**该脚本用于处理已过期或者即将过期的kubernetes集群证书**  
 
-更新kubeadm生成的证书有效期为10年  
+kubeadm生成的证书有效期为为1年，该脚本可将kubeadm生成的证书有效期更新为10年  
 
-kubeadm生成的证书有效期为为1年，虽然`1.8`版开始提供了证书生成命令（kubeadm alpha phase certs <cert_name>，`1.13`版开始改为kubeadm init phase certs <cert_name>）
+该脚本只处理master节点上的证书：kubeadm默认配置了kubelet证书自动更新，node节点kubelet.conf所指向的证书会自动更新  
 
-但是`1.11`版之前执行kubeadm alpha phase certs <cert_name>命令，连不上dl.k8s.io会报错以下错误，从而无法单纯只更新证书    
-```
-unable to get URL "https://dl.k8s.io/release/stable-1.11.txt": Get https://dl.k8s.io/release/stable-1.11.txt: dial tcp 35.201.71.162:443: i/o timeout
-```
+*小于`v1.17`版本的master初始化节点(执行kubeadm init的节点) kubelet.conf里的证书并不会自动更新，这算是一个[bug](<https://github.com/kubernetes/kubeadm/issues/1753>)，该脚本会一并处理更新master节点的kubelet.conf所包含的证书*   
 
-（`1.12`版之后连不上dl.k8s.io也会执行，`1.12`之后版可以使用`kubeadm`来更新证书，`1.15`版之后增加了证书更新命令`kubeadm alpha certs renew <cert_name>`，更新证书更加方便了）  
+# 1. 使用说明
 
-但是你还是**旧版 kubeadm**本，那么可以用这个脚本来更新你的证书，生成证书默认有效期为10年（3650天），你可以更改脚本里面的`CAER_DAYS`变量来达到你想要的证书有效期，单位是“天”  
+小于等于`v1.9`版本，etcd默认是不使用TLS连接，没有etcd相关证书，只需要更新master证书即可
 
-（kubeadm默认生成是ca有效期是10年，你把`CAER_DAYS`改成太大也没用，因为你master相关证书过期的时候已经过去一年了，ca只剩下9年的有效期了）
+大于等于`v1.10`版本，etcd默认开启TLS，需要更新etcd证书和master证书  
 
-（node节点kubelet证书快过期的时候会自动更新，通常不会和master相关证书一起过期）  
+**该脚本适用于所有k8s版本集群证书更新，但大于等于v1.15版本建议使用kubeadm命令更新**  
 
-脚本只更新证书，key使用原来的key  
+**该脚本仅需要在master和etcd节点执行，无需在node节点执行**  
 
-# 使用说明
-## 更新etcd证书和master证书  
-如果master和etcd在同一个节点，执行以下命令更新证书全部etcd证书和master证书，如果你有多个master节点（和etcd节点重合），那么在每个master节点都执行一次  
+## 1.1. 同时更新etcd证书和master证书  
+如果master和etcd在同一个节点，执行以下命令更新证书全部etcd证书和master证书  
+
+如果有多个master节点，在每个master节点都执行一次  
+
 ```
 ./update-kubeadm-cert.sh all
 ```
@@ -42,8 +42,8 @@ unable to get URL "https://dl.k8s.io/release/stable-1.11.txt": Get https://dl.k8
         └── server.crt
 ```
 
-## 只更新etcd证书 
-如果你有多个etcd节点，在每个节点上都执行一次  
+## 1.2. 只更新etcd证书 
+如果有多个etcd节点，在每个etcd节点上都执行一次  
 ```
 ./update-kubeadm-cert.sh etcd
 ```
@@ -58,8 +58,8 @@ unable to get URL "https://dl.k8s.io/release/stable-1.11.txt": Get https://dl.k8
       └── server.crt
 ```
 
-## 只更新master证书  
-如果你有多个master节点，那么在每个节点都执行一次  
+## 1.3. 只更新master证书  
+如果有多个master节点，在每个master节点都执行一次  
 ```
 ./update-kubeadm-cert.sh master
 ```
@@ -76,20 +76,38 @@ unable to get URL "https://dl.k8s.io/release/stable-1.11.txt": Get https://dl.k8
     └── front-proxy-client.crt
 ```
 
-# 示例
-## 更新已过期证书
-- 小于等于1.9版本，etcd默认是不使用TLS连接的，所以默认没有etcd相关证书，只需要更新master证书即可  
-  （具体etcd是否开启TLS，查看是否存在etcd证书，或者从静态pod文件配置判断）  
-  ```
-  ./update-kubeadm-cert.sh master
-  ```
-- 大于等于1.10版本，etcd默认开启TLS，需要更新etcd证书和master证书   
-  ```
-  ./update-kubeadm-cert.sh etcd
-  ./update-kubeadm-cert.sh master
-  ```
-## 证书未过期，更新证书
-如果你使用kubeadm生成的证书未过期，例如你更刚安装完毕集群的时候，也可以用此脚本来更新你的证书有效期为10年。  
+
+
+# 2. 证书更新失败回滚
+
+脚本会自动备份`/etc/kubernetes`目录到`/etc/kubernetes.old-$(date +%Y%m%d)`目录（备份目录名录示例：kubernetes.old-20200325）
+
+若更新证书失败需要回滚，手动将份`/etc/kubernetes.old-$(date +%Y%m%d)`目录覆盖`/etc/kubernetes`目录  
+
+
+
+# 3. kubeadm 证书相关命令发展
+
+- `v1.8`版开始提供了证书生成命令`kubeadm alpha phase certs <cert_name>`
+- `v1.13`版开始证书生成命令改为`kubeadm init phase certs <cert_name>`
+- `v1.15`版增加了证书更新命令`kubeadm alpha certs renew <cert_name>`（这个命令与上面两个区别是：上面两个是生产证书，这个是更新证书），`v1.15`版之后建议使用`kubeadm alpha certs renew <cert_name>`来更新证书
+
+
+
+# 3. 关于大于等于v1.15版本
+
+大于等于`v1.15`的版本建议直接使用`kubeadm alpha certs renew <cert_name>`来更新证书有效期，更新后延长一年  
+
+小坑：  
+
+`kubeadm alpha certs renew` 并不会更新kubelet证书（kubelet.conf文件里面写的客户端证书），因为kubelet证书是默认开启自动更新的  
+
+但是在执行`kubeadm init`的master节点的kubelet.conf文件里面的证书是以base64编码写死在conf文件的（和controller-manager.conf）一样，在用kubeadm命令更新master证书时需要手动将kubelet.conf文件的 `client-certificate-data` 和 `client-key-data` 该为：
+
+```yaml
+client-certificate: /var/lib/kubelet/pki/kubelet-client-current.pem
+client-key: /var/lib/kubelet/pki/kubelet-client-current.pem
 ```
-./update-kubeadm-cert.sh all
-```
+
+（这个问题在`v1.17`版得到了解决https://github.com/kubernetes/kubeadm/issues/1753）
+
