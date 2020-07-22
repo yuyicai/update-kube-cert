@@ -118,5 +118,5 @@ client-certificate: /var/lib/kubelet/pki/kubelet-client-current.pem
 client-key: /var/lib/kubelet/pki/kubelet-client-current.pem
 ```
 
-（这个问题在`v1.17`版得到了解决https://github.com/kubernetes/kubeadm/issues/1753）
+*这个问题在`v1.17`版得到了解决https://github.com/kubernetes/kubeadm/issues/1753*
 
