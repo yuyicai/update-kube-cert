@@ -23,7 +23,7 @@ git clone https://github.com/yuyicai/update-kube-cert.git
 cd update-kubeadm-cert
 chmod 755 update-kubeadm-cert.sh
 ```
-*执行时请使用`./update-kubeadm-cert.sh all`或者`bash update-kubeadm-cert.sh all`，不要使用`sh update-kubeadm-cert.sh`，因为某些发行版sh并不是链接到bash，会不兼容*  
+*执行时请使用`./update-kubeadm-cert.sh all`或者`bash update-kubeadm-cert.sh all`，不要使用`sh update-kubeadm-cert.sh all`，因为某些发行版sh并不是链接到bash，会不兼容*  
 
 ## 1.2. 同时更新etcd证书和master证书  
 如果master和etcd在同一个节点，执行以下命令更新证书全部etcd证书和master证书  
@@ -99,7 +99,7 @@ chmod 755 update-kubeadm-cert.sh
 
 - `v1.8`版开始提供了证书生成命令`kubeadm alpha phase certs <cert_name>`
 - `v1.13`版开始证书生成命令改为`kubeadm init phase certs <cert_name>`
-- `v1.15`版增加了证书更新命令`kubeadm alpha certs renew <cert_name>`（这个命令与上面两个区别是：上面两个是生产证书，这个是更新证书），`v1.15`版之后建议使用`kubeadm alpha certs renew <cert_name>`来更新证书
+- `v1.15`版增加了证书更新命令`kubeadm alpha certs renew <cert_name>`（这个命令与上面两个区别是：上面两个是生成证书，这个是更新证书），`v1.15`版之后建议使用`kubeadm alpha certs renew <cert_name>`来更新证书
 
 
 
@@ -111,7 +111,7 @@ chmod 755 update-kubeadm-cert.sh
 
 `kubeadm alpha certs renew` 并不会更新kubelet证书（kubelet.conf文件里面写的客户端证书），因为kubelet证书是默认开启自动更新的  
 
-但是在执行`kubeadm init`的master节点的kubelet.conf文件里面的证书是以base64编码写死在conf文件的（和controller-manager.conf）一样，在用kubeadm命令更新master证书时需要手动将kubelet.conf文件的 `client-certificate-data` 和 `client-key-data` 该为：
+但是在执行`kubeadm init`的master节点的kubelet.conf文件里面的证书是以base64编码写死在conf文件的（和controller-manager.conf一样），在用kubeadm命令更新master证书时需要手动将kubelet.conf文件的 `client-certificate-data` 和 `client-key-data` 该为：
 
 ```yaml
 client-certificate: /var/lib/kubelet/pki/kubelet-client-current.pem
