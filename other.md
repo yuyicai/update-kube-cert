@@ -1,18 +1,18 @@
 # 1. 只更新 master 证书  
 
-小于等于`v1.9`版本，etcd默认是不使用TLS连接，没有etcd相关证书，只需要更新master证书即可
+小于等于 `v1.9` 版本，etcd 默认是不使用 TLS 连接，没有 etcd 相关证书，只需要更新 master 证书即可
 
 master 和 etcd 分开节点部署的情况，需要分别更新 etcd 和 master 证书
 
 
 
-如果有多个master节点，在每个master节点都执行一次  
+如果有多个 master 节点，在每个 master 节点都执行一次  
 
 ```
 ./update-kubeadm-cert.sh master
 ```
 
-将更新以下master证书和kubeconfig配置文件  
+将更新以下 master 证书和 kubeconfig 配置文件  
 
 ```
 /etc/kubernetes
@@ -28,19 +28,19 @@ master 和 etcd 分开节点部署的情况，需要分别更新 etcd 和 master
 
 
 
-# 2. 只更新etcd证书 
+# 2. 只更新 etcd 证书 
 
 master 和 etcd 分开节点部署的情况，需要分别更新 etcd 和 master 证书
 
 
 
-如果有多个etcd节点，在每个etcd节点上都执行一次  
+如果有多个 etcd 节点，在每个 etcd 节点上都执行一次  
 
 ```
 ./update-kubeadm-cert.sh etcd
 ```
 
-将更新以下etcd证书  
+将更新以下 etcd 证书  
 
 ```
 /etc/kubernetes
@@ -54,7 +54,7 @@ master 和 etcd 分开节点部署的情况，需要分别更新 etcd 和 master
 
 
 
-# 3. 使用脚本处理后证书是延续10年吗？
+# 3. 使用脚本处理后证书是延续 10 年吗？
 
 并不是  
 
@@ -74,7 +74,7 @@ kubeadm 签发的 CA 默认有效期是 10 年 (从 init 集群那一刻开始�
 
 # 5. kubeadm 命令更新证书手动处理
 
-使用本脚本脚本更新证书，不涉及以下这个bug，无需手动处理
+使用本脚本脚本更新证书，不涉及以下这个 bug，无需手动处理
 
 bug 见 https://github.com/kubernetes/kubeadm/issues/1753 ，这个bug 在 `1.17` 版修复
 

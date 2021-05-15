@@ -10,9 +10,9 @@ kubeadm 生成的证书有效期为 1 年，该脚本可将 kubeadm 生成的证
 
 **该脚本仅需要在 master 节点执行，无需在 node 节点执行**  
 
-- 小于等于 `v1.9` 版本，etcd默认不使用 TLS 连接，没有 etcd 相关证书，只需要更新 master 证书即可，见[这里](/other.md)
+- 小于等于 `v1.9` 版本，etcd 默认不使用 TLS 连接，没有 etcd 相关证书，只需要更新 master 证书即可，见[这里](/other.md#1-只更新-master-证书)
 
-- master 和 etcd 分开节点部署的情况，见[这里](/other.md)
+- master 和 etcd 分开节点部署的情况，见[这里](/other.md#1-只更新-master-证书)
 
 - 默认情况按照下面步骤进行证书更新
 
@@ -33,7 +33,7 @@ chmod 755 update-kubeadm-cert.sh
 ```
 ./update-kubeadm-cert.sh all
 ```
-将更新以下证书和kubeconfig配置文件  
+将更新以下证书和 kubeconfig 配置文件  
 ```
 /etc/kubernetes
 ├── admin.conf
@@ -69,5 +69,5 @@ chmod 755 update-kubeadm-cert.sh
 
 若使用该脚本更新证书，无需再手动处理，可忽略该 bug  
 
-`kubeadm alpha certs renew <cert_name>` 后 [手动处理](/other.md)  
+`kubeadm alpha certs renew <cert_name>` 后 [手动处理](/other.md#5-kubeadm-命令更新证书手动处理)  
 
