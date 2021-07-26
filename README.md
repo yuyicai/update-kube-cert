@@ -67,5 +67,5 @@ chmod 755 update-kubeadm-cert.sh
 
 若使用该脚本更新证书，无需再手动处理，可忽略该 bug  
 
-`kubeadm alpha certs renew <cert_name>` 后 [手动处理](/other.md#5-kubeadm-命令更新证书手动处理)  
+`kubeadm alpha certs renew <cert_name>` 后 [手动处理](/other.md#4-kubeadm-命令更新证书手动处理)  
 
