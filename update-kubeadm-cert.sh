@@ -136,9 +136,15 @@ cert::update_kubeconf() {
 
   # set config for kubectl
   if [[ ${cert_name##*/} == "admin" ]]; then
-    mkdir -p ~/.kube
-    cp -fp ${kubeconf_file} ~/.kube/config
-    log::info "copy the admin.conf to ~/.kube/config for kubectl"
+    mkdir -p ${HOME}/.kube
+    local config=${HOME}/.kube/config
+    local config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
+    if [[ -f ${config} ]] && [[ ! -f ${config_backup} ]]; then
+      cp -fp ${config} ${config_backup}
+      log::info "backup ${config} to ${config_backup}"
+    fi
+    cp -fp ${kubeconf_file} ${HOME}/.kube/config
+    log::info "copy the admin.conf to ${HOME}/.kube/config for kubectl"
   fi
 }
 
@@ -242,26 +248,27 @@ main() {
   KUBE_PATH=/etc/kubernetes
   CAER_DAYS=3650
 
-  # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-  cert::backup_file "${KUBE_PATH}"
-
   case ${node_tpye} in
-    etcd)
-	  # update etcd certificates
-      cert::update_etcd_cert
-    ;;
+    # etcd)
+	  # # update etcd certificates
+    #   cert::update_etcd_cert
+    # ;;
     master)
-	  # update master certificates and kubeconf
+      # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+      cert::backup_file "${KUBE_PATH}"
+	    # update master certificates and kubeconf
       cert::update_master_cert
     ;;
     all)
+      # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+      cert::backup_file "${KUBE_PATH}"
       # update etcd certificates
       cert::update_etcd_cert
       # update master certificates and kubeconf
       cert::update_master_cert
     ;;
     *)
-      log::err "unknow, unsupported certs type: ${cert_type}, supported type: all, etcd, master"
+      log::err "unknow, unsupported certs type: ${node_tpye}, supported type: all, master"
       printf "Documentation: https://github.com/yuyicai/update-kube-cert
   example:
     '\033[32m./update-kubeadm-cert.sh all\033[0m' update all etcd certificates, master certificates and kubeconf
@@ -275,15 +282,6 @@ main() {
           ├── apiserver-etcd-client.crt
           ├── apiserver-kubelet-client.crt
           ├── front-proxy-client.crt
-          └── etcd
-              ├── healthcheck-client.crt
-              ├── peer.crt
-              └── server.crt
-
-    '\033[32m./update-kubeadm-cert.sh etcd\033[0m' update only etcd certificates
-      /etc/kubernetes
-      └── pki
-          ├── apiserver-etcd-client.crt
           └── etcd
               ├── healthcheck-client.crt
               ├── peer.crt
