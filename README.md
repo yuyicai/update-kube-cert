@@ -10,9 +10,7 @@ kubeadm 生成的证书有效期为 1 年，该脚本可将 kubeadm 生成的证
 
 **该脚本仅需要在 master 节点执行，无需在 node 节点执行**  
 
-- 小于等于 `v1.9` 版本，etcd 默认不使用 TLS 连接，没有 etcd 相关证书，只需要更新 master 证书即可，见[这里](/other.md#1-只更新-master-证书)
-
-- master 和 etcd 分开节点部署的情况，见[这里](/other.md#1-只更新-master-证书)
+- 若没有 etcd 相关证书，只需要更新 master 证书即可，见[这里](/other.md#1-只更新-master-证书)（小于等于 `v1.9` 版本，etcd 默认不使用 TLS 连接）
 
 - 默认情况按照下面步骤进行证书更新
 
