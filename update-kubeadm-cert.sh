@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -o errexit
 set -o pipefail
@@ -78,7 +78,7 @@ cert::gen_cert() {
   local cert=${cert_name}.crt
   local key=${cert_name}.key
   local csr=${cert_name}.csr
-  local csr_conf='distinguished_name = dn\n[dn]\n[v3_ext]\nkeyUsage = critical, digitalSignature, keyEncipherment\n'
+  local common_csr_conf='distinguished_name = dn\n[dn]\n[v3_ext]\nkeyUsage = critical, digitalSignature, keyEncipherment\n'
 
   check_file "${ca_cert}"
   check_file "${ca_key}"
@@ -87,41 +87,29 @@ cert::gen_cert() {
 
   case "${cert_type}" in
     client)
-      # gen csr
-      openssl req -new  -key "${key}" -subj "${subj}" -reqexts v3_ext \
-        -config <(printf "%bextendedKeyUsage = clientAuth\n" "${csr_conf}") \
-        -out "${csr}" > /dev/null 2>&1
-      # gen cert
-      openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
-        -extfile <(printf "%bextendedKeyUsage = clientAuth\n" "${csr_conf}") \
-        -days "${cert_days}" -out "${cert}" > /dev/null 2>&1
+      csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
     ;;
     server)
-      # gen csr
-      openssl req -new  -key "${key}" -subj "${subj}" -reqexts v3_ext \
-        -config <(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${csr_conf}" "${alt_name}") \
-        -out "${csr}" > /dev/null 2>&1
-      # gen cert
-      openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
-        -extfile <(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${csr_conf}" "${alt_name}") \
-        -days "${cert_days}" -out "${cert}" > /dev/null 2>&1
+      csr_conf=$(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
     ;;
     peer)
-      # gen csr
-      openssl req -new  -key "${key}" -subj "${subj}" -reqexts v3_ext \
-        -config <(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${csr_conf}" "${alt_name}") \
-        -out "${csr}" > /dev/null 2>&1
-      # gen cert
-      openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
-        -extfile <(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${csr_conf}" "${alt_name}") \
-        -days "${cert_days}" -out "${cert}" > /dev/null 2>&1
+      csr_conf=$(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
     ;;
     *)
       log::err "unknow, unsupported certs type: ${YELLOW}${cert_type}${NC}, supported type: client, server, peer"
       exit 1
   esac
 
-  log::info "${GREEN}generated ${BLUE}${cert}${NC}"
+  # gen csr
+  # printf "%b" "${csr_conf}\n"
+  openssl req -new  -key "${key}" -subj "${subj}" -reqexts v3_ext \
+    -config <(printf "%b" "${csr_conf}") \
+    -out "${csr}" > /dev/null 2>&1
+  # gen cert
+  openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
+    -extfile <(printf "%b" "${csr_conf}") \
+    -days "${cert_days}" -out "${cert}"  > /dev/null 2>&1
+
   rm -f "${csr}"
 }
 
@@ -148,7 +136,6 @@ cert::update_kubeconf() {
   # set certificate base64 code to kubeconf
   sed -i 's/client-certificate-data:.*/client-certificate-data: '"${cert_base64}"'/g' "${kubeconf_file}"
 
-  log::info "generated new ${kubeconf_file}"
   rm -f "${cert}"
   rm -f "${key}"
 
@@ -176,22 +163,26 @@ cert::update_etcd_cert() {
   subj=$(cert::get_subj "${ETCD_CERT_SERVER}")
   subject_alt_name=$(cert::get_subject_alt_name "${ETCD_CERT_SERVER}")
   cert::gen_cert "${ETCD_CERT_SERVER}" "peer" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}" "${subject_alt_name}"
+  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_SERVER}.conf${NC}"
 
   # generate etcd peer certificate
   # /etc/kubernetes/pki/etcd/peer
   subj=$(cert::get_subj "${ETCD_CERT_PEER}")
   subject_alt_name=$(cert::get_subject_alt_name "${ETCD_CERT_PEER}")
   cert::gen_cert "${ETCD_CERT_PEER}" "peer" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}" "${subject_alt_name}"
+  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_PEER}.conf${NC}"
 
   # generate etcd healthcheck-client certificate
   # /etc/kubernetes/pki/etcd/healthcheck-client
   subj=$(cert::get_subj "${ETCD_CERT_HEALTHCHECK_CLIENT}")
   cert::gen_cert "${ETCD_CERT_HEALTHCHECK_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}"
+  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_HEALTHCHECK_CLIENT}.conf${NC}"
 
   # generate apiserver-etcd-client certificate
   # /etc/kubernetes/pki/apiserver-etcd-client
   subj=$(cert::get_subj "${ETCD_CERT_APISERVER_ETCD_CLIENT}")
   cert::gen_cert "${ETCD_CERT_APISERVER_ETCD_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}"
+  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_APISERVER_ETCD_CLIENT}.conf${NC}"
 
   # restart etcd
   docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
@@ -207,17 +198,22 @@ cert::update_master_cert() {
   subj=$(cert::get_subj "${CERT_APISERVER}")
   subject_alt_name=$(cert::get_subject_alt_name "${CERT_APISERVER}")
   cert::gen_cert "${CERT_APISERVER}" "server" "${subj}" "${CAER_DAYS}" "${CERT_CA}" "${subject_alt_name}"
+  log::info "${GREEN}updated ${BLUE}${CERT_APISERVER}.crt${NC}"
 
   # generate apiserver-kubelet-client certificate
   # /etc/kubernetes/pki/apiserver-kubelet-client
   subj=$(cert::get_subj "${CERT_APISERVER_KUBELET_CLIENT}")
   cert::gen_cert "${CERT_APISERVER_KUBELET_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${CERT_CA}"
+  log::info "${GREEN}updated ${BLUE}${CERT_APISERVER_KUBELET_CLIENT}.crt${NC}"
 
   # generate kubeconf for controller-manager,scheduler,kubectl and kubelet
   # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
   cert::update_kubeconf "${CONF_CONTROLLER_MANAGER}"
+  log::info "${GREEN}updated ${BLUE}${CONF_CONTROLLER_MANAGER}.conf${NC}"
   cert::update_kubeconf "${CONF_SCHEDULER}"
+  log::info "${GREEN}updated ${BLUE}${CONF_SCHEDULER}.conf${NC}"
   cert::update_kubeconf "${CONF_ADMIN}"
+  log::info "${GREEN}updated ${BLUE}${CONF_ADMIN}.conf${NC}"
   # check kubelet.conf
   # https://github.com/kubernetes/kubeadm/issues/1753
   set +e
@@ -228,12 +224,14 @@ cert::update_master_cert() {
     log::info "does not need to update kubelet.conf"
   else
     cert::update_kubeconf "${CONF_KUBELET}"
+    log::info "${GREEN}updated ${BLUE}${CONF_KUBELET}.conf${NC}"
   fi
 
   # generate front-proxy-client certificate
   # /etc/kubernetes/pki/front-proxy-client
   subj=$(cert::get_subj "${FRONT_PROXY_CLIENT}")
   cert::gen_cert "${FRONT_PROXY_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${FRONT_PROXY_CA}"
+  log::info "${GREEN}updated ${BLUE}${FRONT_PROXY_CLIENT}.crt${NC}"
 
   # restart apiserve, controller-manager, scheduler and kubelet
   docker ps | awk '/k8s_kube-apiserver/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
