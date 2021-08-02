@@ -24,7 +24,7 @@ log::warning() {
 }
 
 check_file() {
-  if [[ ! -r  ${1} ]]; then
+  if [[ ! -r ${1} ]]; then
     log::err "can not find ${1}"
     exit 1
   fi
@@ -44,7 +44,7 @@ cert::get_subj() {
   local cert=${1}.crt
   check_file "${cert}"
   local subj
-  subj=$(openssl x509 -text -noout -in "${cert}"  | grep "Subject:" | sed 's/Subject:/\//g;s/\,/\//;s/[[:space:]]//g')
+  subj=$(openssl x509 -text -noout -in "${cert}" | grep "Subject:" | sed 's/Subject:/\//g;s/\,/\//;s/[[:space:]]//g')
   printf "%s\n" "${subj}"
 }
 
@@ -86,29 +86,30 @@ cert::gen_cert() {
   check_file "${key}"
 
   case "${cert_type}" in
-    client)
-      csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
+  client)
+    csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
     ;;
-    server)
-      csr_conf=$(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
+  server)
+    csr_conf=$(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
     ;;
-    peer)
-      csr_conf=$(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
+  peer)
+    csr_conf=$(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
     ;;
-    *)
-      log::err "unknow, unsupported certs type: ${YELLOW}${cert_type}${NC}, supported type: client, server, peer"
-      exit 1
+  *)
+    log::err "unknow, unsupported certs type: ${YELLOW}${cert_type}${NC}, supported type: client, server, peer"
+    exit 1
+    ;;
   esac
 
   # gen csr
   # printf "%b" "${csr_conf}\n"
-  openssl req -new  -key "${key}" -subj "${subj}" -reqexts v3_ext \
+  openssl req -new -key "${key}" -subj "${subj}" -reqexts v3_ext \
     -config <(printf "%b" "${csr_conf}") \
-    -out "${csr}" > /dev/null 2>&1
+    -out "${csr}" >/dev/null 2>&1
   # gen cert
   openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
     -extfile <(printf "%b" "${csr_conf}") \
-    -days "${cert_days}" -out "${cert}"  > /dev/null 2>&1
+    -days "${cert_days}" -out "${cert}" >/dev/null 2>&1
 
   rm -f "${csr}"
 }
@@ -124,9 +125,9 @@ cert::update_kubeconf() {
   # generate  certificate
   check_file "${kubeconf_file}"
   # get the key from the old kubeconf
-  grep "client-key-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d > "${key}"
+  grep "client-key-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d >"${key}"
   # get the old certificate from the old kubeconf
-  grep "client-certificate-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d > "${cert}"
+  grep "client-certificate-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d >"${cert}"
   # get subject from the old certificate
   subj=$(cert::get_subj "${cert_name}")
   cert::gen_cert "${cert_name}" "client" "${subj}" "${CAER_DAYS}" "${CERT_CA}"
@@ -185,7 +186,7 @@ cert::update_etcd_cert() {
   log::info "${GREEN}updated ${BLUE}${ETCD_CERT_APISERVER_ETCD_CLIENT}.conf${NC}"
 
   # restart etcd
-  docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
+  docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
   log::info "restarted etcd"
 }
 
@@ -217,7 +218,7 @@ cert::update_master_cert() {
   # check kubelet.conf
   # https://github.com/kubernetes/kubeadm/issues/1753
   set +e
-  grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf > /dev/null 2>&1
+  grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf >/dev/null 2>&1
   kubelet_cert_auto_update=$?
   set -e
   if [[ "$kubelet_cert_auto_update" == "0" ]]; then
@@ -234,11 +235,11 @@ cert::update_master_cert() {
   log::info "${GREEN}updated ${BLUE}${FRONT_PROXY_CLIENT}.crt${NC}"
 
   # restart apiserve, controller-manager, scheduler and kubelet
-  docker ps | awk '/k8s_kube-apiserver/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
+  docker ps | awk '/k8s_kube-apiserver/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
   log::info "restarted kube-apiserver"
-  docker ps | awk '/k8s_kube-controller-manager/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
+  docker ps | awk '/k8s_kube-controller-manager/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
   log::info "restarted kube-controller-manager"
-  docker ps | awk '/k8s_kube-scheduler/{print$1}' | xargs -r -I '{}' docker restart {} > /dev/null 2>&1 || true
+  docker ps | awk '/k8s_kube-scheduler/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
   log::info "restarted kube-scheduler"
   systemctl restart kubelet
   log::info "restarted kubelet"
@@ -246,7 +247,7 @@ cert::update_master_cert() {
 
 main() {
   local node_tpye=$1
-  
+
   CAER_DAYS=3650
 
   KUBE_PATH=/etc/kubernetes
@@ -273,27 +274,27 @@ main() {
   ETCD_CERT_APISERVER_ETCD_CLIENT=${PKI_PATH}/apiserver-etcd-client
 
   case ${node_tpye} in
-    # etcd)
-	  # # update etcd certificates
-    #   cert::update_etcd_cert
-    # ;;
-    master)
-      # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-      cert::backup_file "${KUBE_PATH}"
-	    # update master certificates and kubeconf
-      cert::update_master_cert
+  # etcd)
+  # # update etcd certificates
+  #   cert::update_etcd_cert
+  # ;;
+  master)
+    # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+    cert::backup_file "${KUBE_PATH}"
+    # update master certificates and kubeconf
+    cert::update_master_cert
     ;;
-    all)
-      # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-      cert::backup_file "${KUBE_PATH}"
-      # update etcd certificates
-      cert::update_etcd_cert
-      # update master certificates and kubeconf
-      cert::update_master_cert
+  all)
+    # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+    cert::backup_file "${KUBE_PATH}"
+    # update etcd certificates
+    cert::update_etcd_cert
+    # update master certificates and kubeconf
+    cert::update_master_cert
     ;;
-    *)
-      log::err "unknow, unsupported certs type: ${node_tpye}, supported type: all, master"
-      printf "Documentation: https://github.com/yuyicai/update-kube-cert
+  *)
+    log::err "unknow, unsupported certs type: ${node_tpye}, supported type: all, master"
+    printf "Documentation: https://github.com/yuyicai/update-kube-cert
   example:
     '\033[32m./update-kubeadm-cert.sh all\033[0m' update all etcd certificates, master certificates and kubeconf
       /etc/kubernetes
@@ -322,8 +323,9 @@ main() {
           ├── apiserver-kubelet-client.crt
           └── front-proxy-client.crt
 "
-      exit 1
-    esac
+    exit 1
+    ;;
+  esac
 }
 
 main "$@"
