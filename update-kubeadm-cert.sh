@@ -102,9 +102,10 @@ cert::check_etcd_certs_expiration() {
 
 # check master certificates expiration
 cert::check_master_certs_expiration() {
-  local cert
   local certs
   local kubeconfs
+  local cert
+  local conf
 
   certs=(
     "${CERT_CA}"
@@ -122,9 +123,9 @@ cert::check_master_certs_expiration() {
 
   printf "%-50s%-30s\n" "CERTIFICATE" "EXPIRES"
 
-  for cert in "${kubeconfs[@]}"; do
-    if [[ ! -r ${cert} ]]; then
-      printf "%-50s%-30s\n" "${cert}.config" "$(cert::check_kubeconfig_expiration "${cert}")"
+  for conf in "${kubeconfs[@]}"; do
+    if [[ ! -r ${conf} ]]; then
+      printf "%-50s%-30s\n" "${conf}.config" "$(cert::check_kubeconfig_expiration "${conf}")"
     fi
   done
 
@@ -220,51 +221,31 @@ cert::update_kubeconf() {
 
   rm -f "${cert}"
   rm -f "${key}"
-
-  # copy admin.conf to ${HOME}/.kube/config
-  if [[ ${cert_name##*/} == "admin" ]]; then
-    mkdir -p "${HOME}/.kube"
-    local config=${HOME}/.kube/config
-    local config_backup
-    config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
-    if [[ -f ${config} ]] && [[ ! -f ${config_backup} ]]; then
-      cp -fp "${config}" "${config_backup}"
-      log::info "backup ${config} to ${config_backup}"
-    fi
-    cp -fp "${kubeconf_file}" "${HOME}/.kube/config"
-    log::info "copy the admin.conf to ${HOME}/.kube/config"
-  fi
 }
 
 cert::update_etcd_cert() {
   local subj
   local subject_alt_name
+  local cert
 
-  # generate etcd server certificate
+  # generate etcd server,peer certificate
   # /etc/kubernetes/pki/etcd/server
-  subj=$(cert::get_subj "${ETCD_CERT_SERVER}")
-  subject_alt_name=$(cert::get_subject_alt_name "${ETCD_CERT_SERVER}")
-  cert::gen_cert "${ETCD_CERT_SERVER}" "peer" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}" "${subject_alt_name}"
-  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_SERVER}.conf${NC}"
-
-  # generate etcd peer certificate
   # /etc/kubernetes/pki/etcd/peer
-  subj=$(cert::get_subj "${ETCD_CERT_PEER}")
-  subject_alt_name=$(cert::get_subject_alt_name "${ETCD_CERT_PEER}")
-  cert::gen_cert "${ETCD_CERT_PEER}" "peer" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}" "${subject_alt_name}"
-  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_PEER}.conf${NC}"
+  for cert in ${ETCD_CERT_SERVER} ${ETCD_CERT_PEER}; do
+    subj=$(cert::get_subj "${cert}")
+    subject_alt_name=$(cert::get_subject_alt_name "${cert}")
+    cert::gen_cert "${cert}" "peer" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}" "${subject_alt_name}"
+    log::info "${GREEN}updated ${BLUE}${cert}.conf${NC}"
+  done
 
-  # generate etcd healthcheck-client certificate
+  # generate etcd healthcheck-client,apiserver-etcd-client certificate
   # /etc/kubernetes/pki/etcd/healthcheck-client
-  subj=$(cert::get_subj "${ETCD_CERT_HEALTHCHECK_CLIENT}")
-  cert::gen_cert "${ETCD_CERT_HEALTHCHECK_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}"
-  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_HEALTHCHECK_CLIENT}.conf${NC}"
-
-  # generate apiserver-etcd-client certificate
   # /etc/kubernetes/pki/apiserver-etcd-client
-  subj=$(cert::get_subj "${ETCD_CERT_APISERVER_ETCD_CLIENT}")
-  cert::gen_cert "${ETCD_CERT_APISERVER_ETCD_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}"
-  log::info "${GREEN}updated ${BLUE}${ETCD_CERT_APISERVER_ETCD_CLIENT}.conf${NC}"
+  for cert in ${ETCD_CERT_HEALTHCHECK_CLIENT} ${ETCD_CERT_APISERVER_ETCD_CLIENT}; do
+    subj=$(cert::get_subj "${cert}")
+    cert::gen_cert "${cert}" "client" "${subj}" "${CAER_DAYS}" "${ETCD_CERT_CA}"
+    log::info "${GREEN}updated ${BLUE}${cert}.conf${NC}"
+  done
 
   # restart etcd
   docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
@@ -274,6 +255,7 @@ cert::update_etcd_cert() {
 cert::update_master_cert() {
   local subj
   local subject_alt_name
+  local conf
 
   # generate apiserver server certificate
   # /etc/kubernetes/pki/apiserver
@@ -288,14 +270,27 @@ cert::update_master_cert() {
   cert::gen_cert "${CERT_APISERVER_KUBELET_CLIENT}" "client" "${subj}" "${CAER_DAYS}" "${CERT_CA}"
   log::info "${GREEN}updated ${BLUE}${CERT_APISERVER_KUBELET_CLIENT}.crt${NC}"
 
-  # generate kubeconf for controller-manager,scheduler,kubectl and kubelet
+  # generate kubeconf for controller-manager,scheduler and kubelet
   # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
-  cert::update_kubeconf "${CONF_CONTROLLER_MANAGER}"
-  log::info "${GREEN}updated ${BLUE}${CONF_CONTROLLER_MANAGER}.conf${NC}"
-  cert::update_kubeconf "${CONF_SCHEDULER}"
-  log::info "${GREEN}updated ${BLUE}${CONF_SCHEDULER}.conf${NC}"
-  cert::update_kubeconf "${CONF_ADMIN}"
-  log::info "${GREEN}updated ${BLUE}${CONF_ADMIN}.conf${NC}"
+  for conf in ${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN}; do
+    cert::update_kubeconf "${conf}"
+    log::info "${GREEN}updated ${BLUE}${conf}.conf${NC}"
+
+    # copy admin.conf to ${HOME}/.kube/config
+    if [[ ${conf##*/} == "admin" ]]; then
+      mkdir -p "${HOME}/.kube"
+      local config=${HOME}/.kube/config
+      local config_backup
+      config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
+      if [[ -f ${config} ]] && [[ ! -f ${config_backup} ]]; then
+        cp -fp "${config}" "${config_backup}"
+        log::info "backup ${config} to ${config_backup}"
+      fi
+      cp -fp "${conf}.conf" "${HOME}/.kube/config"
+      log::info "copy the admin.conf to ${HOME}/.kube/config"
+    fi
+  done
+
   # check kubelet.conf
   # https://github.com/kubernetes/kubeadm/issues/1753
   set +e
@@ -365,7 +360,9 @@ main() {
     # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
     cert::backup_file "${KUBE_PATH}"
     # update master certificates and kubeconf
+    log::info "${GREEN}updating...${NC}"
     cert::update_master_cert
+    log::info "${GREEN}done${NC}"
     # check certificates expiration after certificates updated
     cert::check_master_certs_expiration
     ;;
@@ -375,9 +372,11 @@ main() {
     # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
     cert::backup_file "${KUBE_PATH}"
     # update etcd certificates
+    log::info "${GREEN}updating...${NC}"
     cert::update_etcd_cert
     # update master certificates and kubeconf
     cert::update_master_cert
+    log::info "${GREEN}done${NC}"
     # check certificates expiration after certificates updated
     cert::check_all_expiration
     ;;
