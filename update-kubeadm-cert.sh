@@ -33,8 +33,9 @@ check_file() {
 # get x509v3 subject alternative name from the old certificate
 cert::get_subject_alt_name() {
   local cert=${1}.crt
-  check_file "${cert}"
   local alt_name
+
+  check_file "${cert}"
   alt_name=$(openssl x509 -text -noout -in "${cert}" | grep -A1 'Alternative' | tail -n1 | sed 's/[[:space:]]*Address//g')
   printf "%s\n" "${alt_name}"
 }
@@ -42,8 +43,9 @@ cert::get_subject_alt_name() {
 # get subject from the old certificate
 cert::get_subj() {
   local cert=${1}.crt
-  check_file "${cert}"
   local subj
+
+  check_file "${cert}"
   subj=$(openssl x509 -text -noout -in "${cert}" | grep "Subject:" | sed 's/Subject:/\//g;s/\,/\//;s/[[:space:]]//g')
   printf "%s\n" "${subj}"
 }
@@ -56,6 +58,87 @@ cert::backup_file() {
   else
     log::warning "does not backup, ${file}.old-$(date +%Y%m%d) already exists"
   fi
+}
+
+# check certificate expiration
+cert::check_cert_expiration() {
+  local cert=${1}.crt
+  local cert_expires
+
+  cert_expires=$(openssl x509 -text -noout -in "${cert}" | awk -F "Not Before: " '/Not Before/{print$2}')
+  printf "%s\n" "${cert_expires}"
+}
+
+# check kubeconfig expiration
+cert::check_kubeconfig_expiration() {
+  local config=${1}.conf
+  local cert
+  local cert_expires
+
+  cert=$(grep "client-certificate-data" "${config}" | awk '{print$2}' | base64 -d)
+  cert_expires=$(openssl x509 -text -noout -in <(printf "%s" "${cert}") | awk -F "Not Before: " '/Not Before/{print$2}')
+  printf "%s\n" "${cert_expires}"
+}
+
+# check etcd certificates expiration
+cert::check_etcd_certs_expiration() {
+  local cert
+  local certs
+
+  certs=(
+    "${ETCD_CERT_CA}"
+    "${ETCD_CERT_SERVER}"
+    "${ETCD_CERT_PEER}"
+    "${ETCD_CERT_HEALTHCHECK_CLIENT}"
+    "${ETCD_CERT_APISERVER_ETCD_CLIENT}"
+  )
+
+  for cert in "${certs[@]}"; do
+    if [[ ! -r ${cert} ]]; then
+      printf "%-50s%-30s\n" "${cert}.crt" "$(cert::check_cert_expiration "${cert}")"
+    fi
+  done
+}
+
+# check master certificates expiration
+cert::check_master_certs_expiration() {
+  local cert
+  local certs
+  local kubeconfs
+
+  certs=(
+    "${CERT_CA}"
+    "${CERT_APISERVER}"
+    "${CERT_APISERVER_KUBELET_CLIENT}"
+    "${FRONT_PROXY_CA}"
+    "${FRONT_PROXY_CLIENT}"
+  )
+
+  kubeconfs=(
+    "${CONF_CONTROLLER_MANAGER}"
+    "${CONF_SCHEDULER}"
+    "${CONF_ADMIN}"
+  )
+
+  printf "%-50s%-30s\n" "CERTIFICATE" "EXPIRES"
+
+  for cert in "${kubeconfs[@]}"; do
+    if [[ ! -r ${cert} ]]; then
+      printf "%-50s%-30s\n" "${cert}.config" "$(cert::check_kubeconfig_expiration "${cert}")"
+    fi
+  done
+
+  for cert in "${certs[@]}"; do
+    if [[ ! -r ${cert} ]]; then
+      printf "%-50s%-30s\n" "${cert}.crt" "$(cert::check_cert_expiration "${cert}")"
+    fi
+  done
+}
+
+# check all certificates expiration
+cert::check_all_expiration() {
+  cert::check_master_certs_expiration
+  cert::check_etcd_certs_expiration
 }
 
 # generate certificate whit client, server or peer
@@ -102,7 +185,6 @@ cert::gen_cert() {
   esac
 
   # gen csr
-  # printf "%b" "${csr_conf}\n"
   openssl req -new -key "${key}" -subj "${subj}" -reqexts v3_ext \
     -config <(printf "%b" "${csr_conf}") \
     -out "${csr}" >/dev/null 2>&1
@@ -122,7 +204,6 @@ cert::update_kubeconf() {
   local subj
   local cert_base64
 
-  # generate  certificate
   check_file "${kubeconf_file}"
   # get the key from the old kubeconf
   grep "client-key-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d >"${key}"
@@ -246,7 +327,7 @@ cert::update_master_cert() {
 }
 
 main() {
-  local node_tpye=$1
+  local node_type=$1
 
   CAER_DAYS=3650
 
@@ -273,27 +354,39 @@ main() {
   ETCD_CERT_HEALTHCHECK_CLIENT=${PKI_PATH}/etcd/healthcheck-client
   ETCD_CERT_APISERVER_ETCD_CLIENT=${PKI_PATH}/apiserver-etcd-client
 
-  case ${node_tpye} in
+  case ${node_type} in
   # etcd)
   # # update etcd certificates
   #   cert::update_etcd_cert
   # ;;
   master)
+    # check certificates expiration
+    cert::check_master_certs_expiration
     # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
     cert::backup_file "${KUBE_PATH}"
     # update master certificates and kubeconf
     cert::update_master_cert
+    # check certificates expiration after certificates updated
+    cert::check_master_certs_expiration
     ;;
   all)
+    # check certificates expiration
+    cert::check_all_expiration
     # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
     cert::backup_file "${KUBE_PATH}"
     # update etcd certificates
     cert::update_etcd_cert
     # update master certificates and kubeconf
     cert::update_master_cert
+    # check certificates expiration after certificates updated
+    cert::check_all_expiration
+    ;;
+  check)
+    # check certificates expiration
+    cert::check_all_expiration
     ;;
   *)
-    log::err "unknow, unsupported certs type: ${node_tpye}, supported type: all, master"
+    log::err "unknown, unsupported cert type: ${node_type}, supported type: \"all\", \"master\""
     printf "Documentation: https://github.com/yuyicai/update-kube-cert
   example:
     '\033[32m./update-kubeadm-cert.sh all\033[0m' update all etcd certificates, master certificates and kubeconf
