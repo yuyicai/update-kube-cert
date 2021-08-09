@@ -165,7 +165,7 @@ cert::gen_cert() {
   local common_csr_conf='distinguished_name = dn\n[dn]\n[v3_ext]\nkeyUsage = critical, digitalSignature, keyEncipherment\n'
 
   for file in "${ca_cert}" "${ca_key}" "${cert}" "${key}"; do
-    check_file "${item}"
+    check_file "${file}"
   done
 
   case "${cert_type}" in
@@ -359,7 +359,7 @@ main() {
     # update master certificates and kubeconf
     log::info "${GREEN}updating...${NC}"
     cert::update_master_cert
-    log::info "${GREEN}done${NC}"
+    log::info "${GREEN}done!!!${NC}"
     # check certificates expiration after certificates updated
     cert::check_master_certs_expiration
     ;;
@@ -373,7 +373,7 @@ main() {
     cert::update_etcd_cert
     # update master certificates and kubeconf
     cert::update_master_cert
-    log::info "${GREEN}done${NC}"
+    log::info "${GREEN}done!!!${NC}"
     # check certificates expiration after certificates updated
     cert::check_all_expiration
     ;;
