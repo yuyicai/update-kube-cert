@@ -35,7 +35,7 @@ kubeadm 签发的 CA 默认有效期是 10 年 (从 init 集群那一刻开始�
 
 - `v1.8` 版开始提供了证书生成命令 `kubeadm alpha phase certs <cert_name>`
 - `v1.13` 版开始证书生成命令改为 `kubeadm init phase certs <cert_name>`
-- `v1.15` 版增加了证书更新命令 `kubeadm alpha certs renew <cert_name>`（这个命令与上面两个区别是：上面两个是生成证书，这个是更新证书），`v1.15` 版之后建议使用 `kubeadm alpha certs renew <cert_name>` 来更新证书
+- `v1.15` 版增加了证书更新命令 `kubeadm alpha certs renew <cert_name>`（这个命令与上面两个区别是：上面两个是生成证书，这个是更新证书），`v1.15` 版之后可使用 `kubeadm alpha certs renew <cert_name>` 来更新证书
 
 
 # 4. kubeadm 命令更新证书手动处理
@@ -44,9 +44,9 @@ kubeadm 签发的 CA 默认有效期是 10 年 (从 init 集群那一刻开始�
 
 bug 见 https://github.com/kubernetes/kubeadm/issues/1753 ，这个bug 在 `1.17` 版修复
 
-针对小于  `1.17版本` ，使用  `kubeadm alpha certs renew <cert_name>`  来更新证
+针对小于  `1.17版本` ，使用  `kubeadm alpha certs renew <cert_name>`  来更新证书
 
-`kubeadm alpha certs renew`  并不会更新 kubelet 证书（kubelet.conf 文件里面写的客户端证书），因为 kubelet 证书是默认开启自动轮回更新的，但是在执行 `kubeadm init` 的 master 节点的 kubelet.conf 文件里面的证书是以 base64 编码写死的 (和 controller-manager.conf 一样)
+`kubeadm alpha certs renew`  并不会更新 kubelet 证书（kubelet.conf 文件里面写的客户端证书），因为 kubelet 证书是默认开启自动轮回更新的，但是在执行 `kubeadm init` 的 master 节点的 kubelet.conf 文件里面的证书是以 base64 编码写死的 (类似 controller-manager.conf 里面的证书)
 
 在用 `kubeadm`  命令更新 master 证书时需要手动将 kubelet.conf 文件的  `client-certificate-data`  和  `client-key-data`  改为：
 
