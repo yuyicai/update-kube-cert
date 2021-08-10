@@ -49,7 +49,7 @@ chmod 755 update-kubeadm-cert.sh
         └── server.crt
 ```
 
-
+[更多](/other.md)
 
 # 2. 证书更新失败回滚
 
@@ -61,7 +61,7 @@ chmod 755 update-kubeadm-cert.sh
 
 # 3. 其他
 
-大于等于 `v1.15` 的版本建议直接使用 `kubeadm alpha certs renew <cert_name>` 来更新证书有效期，更新后证书有效期延长一年 
+大于等于 `v1.15` 的版本可直接使用 `kubeadm alpha certs renew <cert_name>` 来更新证书有效期，更新后证书有效期延长一年 
 
 若小于小于 `v1.17` 版本实用 `kubeadm alpha certs renew <cert_name>` 来更新证书，需要手动处理一下，这是一个 [bug](<https://github.com/kubernetes/kubeadm/issues/1753>)  
 
