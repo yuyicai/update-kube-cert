@@ -65,7 +65,7 @@ cert::check_cert_expiration() {
   local cert=${1}.crt
   local cert_expires
 
-  cert_expires=$(openssl x509 -text -noout -in "${cert}" | awk -F "Not Before: " '/Not Before/{print$2}')
+  cert_expires=$(openssl x509 -text -noout -in "${cert}" | awk -F ": " '/Not After/{print$2}')
   printf "%s\n" "${cert_expires}"
 }
 
@@ -76,7 +76,7 @@ cert::check_kubeconfig_expiration() {
   local cert_expires
 
   cert=$(grep "client-certificate-data" "${config}" | awk '{print$2}' | base64 -d)
-  cert_expires=$(openssl x509 -text -noout -in <(printf "%s" "${cert}") | awk -F "Not Before: " '/Not Before/{print$2}')
+  cert_expires=$(openssl x509 -text -noout -in <(printf "%s" "${cert}") | awk -F ": " '/Not After/{print$2}')
   printf "%s\n" "${cert_expires}"
 }
 
