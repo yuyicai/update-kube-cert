@@ -31,6 +31,60 @@ chmod 755 update-kubeadm-cert.sh
 ```
 ./update-kubeadm-cert.sh all
 ```
+
+输出类似信息
+```
+CERTIFICATE                                       EXPIRES
+/etc/kubernetes/controller-manager.config         Sep 12 08:38:56 2022 GMT
+/etc/kubernetes/scheduler.config                  Sep 12 08:38:56 2022 GMT
+/etc/kubernetes/admin.config                      Sep 12 08:38:56 2022 GMT
+/etc/kubernetes/pki/ca.crt                        Sep 11 08:38:53 2031 GMT
+/etc/kubernetes/pki/apiserver.crt                 Sep 12 08:38:54 2022 GMT
+/etc/kubernetes/pki/apiserver-kubelet-client.crt  Sep 12 08:38:54 2022 GMT
+/etc/kubernetes/pki/front-proxy-ca.crt            Sep 11 08:38:54 2031 GMT
+/etc/kubernetes/pki/front-proxy-client.crt        Sep 12 08:38:54 2022 GMT
+/etc/kubernetes/pki/etcd/ca.crt                   Sep 11 08:38:55 2031 GMT
+/etc/kubernetes/pki/etcd/server.crt               Sep 12 08:38:55 2022 GMT
+/etc/kubernetes/pki/etcd/peer.crt                 Sep 12 08:38:55 2022 GMT
+/etc/kubernetes/pki/etcd/healthcheck-client.crt   Sep 12 08:38:55 2022 GMT
+/etc/kubernetes/pki/apiserver-etcd-client.crt     Sep 12 08:38:56 2022 GMT
+[2021-09-12T16:41:25.93+0800][INFO] backup /etc/kubernetes to /etc/kubernetes.old-20210912
+[2021-09-12T16:41:25.93+0800][INFO] updating...
+[2021-09-12T16:41:25.99+0800][INFO] updated /etc/kubernetes/pki/etcd/server.conf
+[2021-09-12T16:41:26.04+0800][INFO] updated /etc/kubernetes/pki/etcd/peer.conf
+[2021-09-12T16:41:26.07+0800][INFO] updated /etc/kubernetes/pki/etcd/healthcheck-client.conf
+[2021-09-12T16:41:26.11+0800][INFO] updated /etc/kubernetes/pki/apiserver-etcd-client.conf
+[2021-09-12T16:41:26.54+0800][INFO] restarted etcd
+[2021-09-12T16:41:26.60+0800][INFO] updated /etc/kubernetes/pki/apiserver.crt
+[2021-09-12T16:41:26.64+0800][INFO] updated /etc/kubernetes/pki/apiserver-kubelet-client.crt
+[2021-09-12T16:41:26.69+0800][INFO] updated /etc/kubernetes/controller-manager.conf
+[2021-09-12T16:41:26.74+0800][INFO] updated /etc/kubernetes/scheduler.conf
+[2021-09-12T16:41:26.79+0800][INFO] updated /etc/kubernetes/admin.conf
+[2021-09-12T16:41:26.79+0800][INFO] backup /root/.kube/config to /root/.kube/config.old-20210912
+[2021-09-12T16:41:26.80+0800][INFO] copy the admin.conf to /root/.kube/config
+[2021-09-12T16:41:26.85+0800][INFO] updated /etc/kubernetes/kubelet.conf
+[2021-09-12T16:41:26.88+0800][INFO] updated /etc/kubernetes/pki/front-proxy-client.crt
+[2021-09-12T16:41:28.70+0800][INFO] restarted apiserver
+[2021-09-12T16:41:29.17+0800][INFO] restarted controller-manager
+[2021-09-12T16:41:30.07+0800][INFO] restarted scheduler
+[2021-09-12T16:41:30.13+0800][INFO] restarted kubelet
+[2021-09-12T16:41:30.14+0800][INFO] done!!!
+CERTIFICATE                                       EXPIRES
+/etc/kubernetes/controller-manager.config         Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/scheduler.config                  Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/admin.config                      Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/ca.crt                        Sep 11 08:38:53 2031 GMT
+/etc/kubernetes/pki/apiserver.crt                 Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/apiserver-kubelet-client.crt  Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/front-proxy-ca.crt            Sep 11 08:38:54 2031 GMT
+/etc/kubernetes/pki/front-proxy-client.crt        Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/etcd/ca.crt                   Sep 11 08:38:55 2031 GMT
+/etc/kubernetes/pki/etcd/server.crt               Sep 11 08:41:25 2031 GMT
+/etc/kubernetes/pki/etcd/peer.crt                 Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/etcd/healthcheck-client.crt   Sep 11 08:41:26 2031 GMT
+/etc/kubernetes/pki/apiserver-etcd-client.crt     Sep 11 08:41:26 2031 GMT
+```
+
 将更新以下证书和 kubeconfig 配置文件  
 ```
 /etc/kubernetes
