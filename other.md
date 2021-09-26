@@ -56,7 +56,7 @@ client-key: /var/lib/kubelet/pki/kubelet-client-current.pem
 ```
 
 # 5. 更新slave证书
-在`v1.75`版本使用 #1 中`./update-kubeadm-cert.sh master`,没有自动更新 slave 节点。（高版本不会出现这个问题，会自动更新 slave 节点）。
+在`v1.7.5`版本使用 #1 中`./update-kubeadm-cert.sh master`,没有自动更新 slave 节点。（高版本不会出现这个问题，会自动更新 slave 节点）。
 
 slave 中具体报错为`Failed to list *v1.Pod: the server has asked for the client to provide credentials (get pods)`
 
