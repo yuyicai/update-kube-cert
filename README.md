@@ -119,9 +119,6 @@ CERTIFICATE                                       EXPIRES
 
 大于等于 `v1.15` 的版本可直接使用 `kubeadm alpha certs renew <cert_name>` 来更新证书有效期，更新后证书有效期延长 1 年 
 
-若小于小于 `v1.17` 版本实用 `kubeadm alpha certs renew <cert_name>` 来更新证书，需要手动处理一下，这是一个 [bug](<https://github.com/kubernetes/kubeadm/issues/1753>)  
+若小于 `v1.17` 版本使用 `kubeadm alpha certs renew <cert_name>` 来更新证书，有一个 [bug](<https://github.com/kubernetes/kubeadm/issues/1753>)，需要手动处理一下，  处理[见这里](/other.md#4-kubeadm-命令更新证书手动处理)  
 
 若使用该脚本更新证书，无需再手动处理，可忽略该 bug  
-
-`kubeadm alpha certs renew <cert_name>` 后手动处理[见这里](/other.md#4-kubeadm-命令更新证书手动处理)  
-
