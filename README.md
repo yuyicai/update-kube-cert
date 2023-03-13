@@ -18,7 +18,7 @@ This script only handles master node's certificates. Kubelet certificates of wor
 
 ```
 git clone https://github.com/yuyicai/update-kube-cert.git
-cd update-kubeadm-cert
+cd update-kube-cert
 chmod 755 update-kubeadm-cert.sh
 ```
 
