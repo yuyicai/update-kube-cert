@@ -24,7 +24,12 @@ chmod 755 update-kubeadm-cert.sh
 
 ## 1.2 Renew the certificate
 
-**If you use `containerd` as CRI runtime, use `update-kubeadm-cert-crictl.sh` instead of `update-kubeadm-cert.sh`**
+**If you use `containerd` as CRI runtime：**
+
+- use `update-kubeadm-cert-crictl.sh` instead of `update-kubeadm-cert.sh`
+- manual restart the control plane Pods (necessary)
+  > After running the command you should restart the control plane Pods. This is required since dynamic certificate reload is currently not supported for all components and certificates. Static Pods are managed by the local kubelet and not by the API Server, thus kubectl cannot be used to delete and restart them. To restart a static Pod you can temporarily remove its manifest file from /etc/kubernetes/manifests/ and wait for 20 seconds (see the fileCheckFrequency value in KubeletConfiguration struct. The kubelet will terminate the Pod if it's no longer in the manifest directory. You can then move the file back and after another fileCheckFrequency period, the kubelet will recreate the Pod and the certificate renewal for the component can complete.  
+  > https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#manual-certificate-renewal
 
 Use `./update-kubeadm-cert.sh all` or `bash update-kubeadm-cert.sh all` to execute it. Please do not use `sh update-kubeadm-cert.sh all`，Because some of Linux distributions doesn't link sh to bash. it may cause the problem of compatibility.
 

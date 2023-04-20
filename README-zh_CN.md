@@ -24,7 +24,12 @@ chmod 755 update-kubeadm-cert.sh
 
 ## 1.2. 更新证书
 
-**如果使用 `containerd` 作为 CRI 运行时，使用 `update-kubeadm-cert-crictl.sh` 代替 `update-kubeadm-cert.sh`**
+**如果使用 `containerd` 作为 CRI 运行时：**
+
+- 使用 `update-kubeadm-cert-crictl.sh` 代替 `update-kubeadm-cert.sh`
+- 手动重启控制平面 Pods（必须）
+  > 执行完此命令之后你需要重启控制面 Pods。因为动态证书重载目前还不被所有组件和证书支持，所有这项操作是必须的。 静态 Pods 是被本地 kubelet 而不是 API Server 管理， 所以 kubectl 不能用来删除或重启他们。 要重启静态 Pod 你可以临时将清单文件从 /etc/kubernetes/manifests/ 移除并等待 20 秒 （参考 KubeletConfiguration 结构 中的 fileCheckFrequency 值）。 如果 Pod 不在清单目录里，kubelet 将会终止它。 在另一个 fileCheckFrequency 周期之后你可以将文件移回去，为了组件可以完成 kubelet 将重新创建 Pod 和证书更新。  
+  > https://kubernetes.io/zh-cn/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#manual-certificate-renewal
 
 执行时请使用 `./update-kubeadm-cert.sh all` 或者 `bash update-kubeadm-cert.sh all` ，不要使用 `sh update-kubeadm-cert.sh all`，因为某些 Linux 发行版 sh 并不是链接到 bash，可能会不兼容
 
