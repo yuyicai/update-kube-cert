@@ -26,7 +26,7 @@ chmod 755 update-kubeadm-cert.sh
 
 **If you use `containerd` as CRI runtime：**
 
-- use `update-kubeadm-cert-crictl.sh` instead of `update-kubeadm-cert.sh`
+- add the `--cri containerd` argument when executing the script. The default is `docker` runtime.
 - manual restart the control plane Pods (necessary)
   > After running the command you should restart the control plane Pods. This is required since dynamic certificate reload is currently not supported for all components and certificates. Static Pods are managed by the local kubelet and not by the API Server, thus kubectl cannot be used to delete and restart them. To restart a static Pod you can temporarily remove its manifest file from /etc/kubernetes/manifests/ and wait for 20 seconds (see the fileCheckFrequency value in KubeletConfiguration struct. The kubelet will terminate the Pod if it's no longer in the manifest directory. You can then move the file back and after another fileCheckFrequency period, the kubelet will recreate the Pod and the certificate renewal for the component can complete.  
   > https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#manual-certificate-renewal
@@ -36,7 +36,7 @@ Use `./update-kubeadm-cert.sh all` or `bash update-kubeadm-cert.sh all` to execu
 **Execute on every master node if the cluster has more than one**
 
 ```
-./update-kubeadm-cert.sh all
+./update-kubeadm-cert.sh all --cri docker
 ```
 
 The output should be like this:
@@ -62,7 +62,7 @@ CERTIFICATE                                       EXPIRES
 [2021-09-12T16:41:26.04+0800][INFO] updated /etc/kubernetes/pki/etcd/peer.conf
 [2021-09-12T16:41:26.07+0800][INFO] updated /etc/kubernetes/pki/etcd/healthcheck-client.conf
 [2021-09-12T16:41:26.11+0800][INFO] updated /etc/kubernetes/pki/apiserver-etcd-client.conf
-[2021-09-12T16:41:26.54+0800][INFO] restarted etcd
+[2021-09-12T16:41:26.54+0800][INFO] restarted etcd with docker
 [2021-09-12T16:41:26.60+0800][INFO] updated /etc/kubernetes/pki/apiserver.crt
 [2021-09-12T16:41:26.64+0800][INFO] updated /etc/kubernetes/pki/apiserver-kubelet-client.crt
 [2021-09-12T16:41:26.69+0800][INFO] updated /etc/kubernetes/controller-manager.conf
@@ -72,9 +72,9 @@ CERTIFICATE                                       EXPIRES
 [2021-09-12T16:41:26.80+0800][INFO] copy the admin.conf to /root/.kube/config
 [2021-09-12T16:41:26.85+0800][INFO] updated /etc/kubernetes/kubelet.conf
 [2021-09-12T16:41:26.88+0800][INFO] updated /etc/kubernetes/pki/front-proxy-client.crt
-[2021-09-12T16:41:28.70+0800][INFO] restarted apiserver
-[2021-09-12T16:41:29.17+0800][INFO] restarted controller-manager
-[2021-09-12T16:41:30.07+0800][INFO] restarted scheduler
+[2021-09-12T16:41:28.70+0800][INFO] restarted apiserver with docker
+[2021-09-12T16:41:29.17+0800][INFO] restarted controller-manager with docker
+[2021-09-12T16:41:30.07+0800][INFO] restarted scheduler with docker
 [2021-09-12T16:41:30.13+0800][INFO] restarted kubelet
 [2021-09-12T16:41:30.14+0800][INFO] done!!!
 CERTIFICATE                                       EXPIRES

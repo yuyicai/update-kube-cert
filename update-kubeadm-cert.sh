@@ -10,6 +10,8 @@ RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 BLUE='\033[34m'
+# set default cri
+CRI="docker"
 
 log::err() {
   printf "[$(date +'%Y-%m-%dT%H:%M:%S.%2N%z')][${RED}ERROR${NC}] %b\n" "$@"
@@ -247,8 +249,15 @@ cert::update_etcd_cert() {
   done
 
   # restart etcd
-  docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
-  log::info "restarted etcd"
+  case $CRI in
+    "docker")
+      docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
+      ;;
+    "containerd")
+      crictl ps | awk '/etcd-/{print$(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
+      ;;
+  esac
+  log::info "restarted etcd with ${CRI}"
 }
 
 cert::update_master_cert() {
@@ -311,8 +320,15 @@ cert::update_master_cert() {
 
   # restart apiserver, controller-manager, scheduler and kubelet
   for item in "apiserver" "controller-manager" "scheduler"; do
-    docker ps | awk '/k8s_kube-'${item}'/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
-    log::info "restarted ${item}"
+    case $CRI in
+      "docker")
+        docker ps | awk '/k8s_kube-'${item}'/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
+        ;;
+      "containerd")
+        crictl ps | awk '/kube-'${item}'-/{print $(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
+        ;;
+    esac
+    log::info "restarted ${item} with ${CRI}"
   done
   systemctl restart kubelet || true
   log::info "restarted kubelet"
@@ -320,6 +336,36 @@ cert::update_master_cert() {
 
 main() {
   local node_type=$1
+
+  # read the options
+  ARGS=`getopt -o c: --long cri: -- "$@"`
+  eval set -- "$ARGS"
+  # extract options and their arguments into variables.
+  while true
+  do
+    case "$1" in
+      -c|--cri)
+        case "$2" in
+          "docker"|"containerd")
+            CRI=$2
+            shift 2
+            ;;
+          *)
+            echo 'Unsupported cri. Valid options are "docker", "containerd".'
+            exit 1
+            ;;
+        esac
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        echo "Invalid arguments."
+        exit 1
+        ;;
+    esac
+  done
 
   CERT_DAYS=3650
 

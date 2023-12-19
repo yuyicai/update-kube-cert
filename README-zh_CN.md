@@ -26,7 +26,7 @@ chmod 755 update-kubeadm-cert.sh
 
 **如果使用 `containerd` 作为 CRI 运行时：**
 
-- 使用 `update-kubeadm-cert-crictl.sh` 代替 `update-kubeadm-cert.sh`
+- 执行脚本时增加`--cri containerd`参数，默认为`docker`运行时
 - 手动重启控制平面 Pods（必须）
   > 执行完此命令之后你需要重启控制面 Pods。因为动态证书重载目前还不被所有组件和证书支持，所有这项操作是必须的。 静态 Pods 是被本地 kubelet 而不是 API Server 管理， 所以 kubectl 不能用来删除或重启他们。 要重启静态 Pod 你可以临时将清单文件从 /etc/kubernetes/manifests/ 移除并等待 20 秒 （参考 KubeletConfiguration 结构 中的 fileCheckFrequency 值）。 如果 Pod 不在清单目录里，kubelet 将会终止它。 在另一个 fileCheckFrequency 周期之后你可以将文件移回去，为了组件可以完成 kubelet 将重新创建 Pod 和证书更新。  
   > https://kubernetes.io/zh-cn/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#manual-certificate-renewal
@@ -36,7 +36,7 @@ chmod 755 update-kubeadm-cert.sh
 **如果有多个 master 节点，在每个 master 节点都执行一次**
 
 ```
-./update-kubeadm-cert.sh all
+./update-kubeadm-cert.sh all --cri docker
 ```
 
 输出类似信息
@@ -62,7 +62,7 @@ CERTIFICATE                                       EXPIRES
 [2021-09-12T16:41:26.04+0800][INFO] updated /etc/kubernetes/pki/etcd/peer.conf
 [2021-09-12T16:41:26.07+0800][INFO] updated /etc/kubernetes/pki/etcd/healthcheck-client.conf
 [2021-09-12T16:41:26.11+0800][INFO] updated /etc/kubernetes/pki/apiserver-etcd-client.conf
-[2021-09-12T16:41:26.54+0800][INFO] restarted etcd
+[2021-09-12T16:41:26.54+0800][INFO] restarted etcd with docker
 [2021-09-12T16:41:26.60+0800][INFO] updated /etc/kubernetes/pki/apiserver.crt
 [2021-09-12T16:41:26.64+0800][INFO] updated /etc/kubernetes/pki/apiserver-kubelet-client.crt
 [2021-09-12T16:41:26.69+0800][INFO] updated /etc/kubernetes/controller-manager.conf
@@ -72,9 +72,9 @@ CERTIFICATE                                       EXPIRES
 [2021-09-12T16:41:26.80+0800][INFO] copy the admin.conf to /root/.kube/config
 [2021-09-12T16:41:26.85+0800][INFO] updated /etc/kubernetes/kubelet.conf
 [2021-09-12T16:41:26.88+0800][INFO] updated /etc/kubernetes/pki/front-proxy-client.crt
-[2021-09-12T16:41:28.70+0800][INFO] restarted apiserver
-[2021-09-12T16:41:29.17+0800][INFO] restarted controller-manager
-[2021-09-12T16:41:30.07+0800][INFO] restarted scheduler
+[2021-09-12T16:41:28.70+0800][INFO] restarted apiserver with docker
+[2021-09-12T16:41:29.17+0800][INFO] restarted controller-manager with docker
+[2021-09-12T16:41:30.07+0800][INFO] restarted scheduler with docker
 [2021-09-12T16:41:30.13+0800][INFO] restarted kubelet
 [2021-09-12T16:41:30.14+0800][INFO] done!!!
 CERTIFICATE                                       EXPIRES
