@@ -17,6 +17,13 @@ KUBE_CRI=${KUBE_CRI:-"docker"}
 # set default certificate expiration days
 KUBE_CERT_DAYS=${KUBE_CERT_DAYS:-3650}
 
+# cert update scope, etcd, master, all
+KUBE_CERT_SCOPE=${KUBE_CERT_SCOPE:-"all"}
+
+# action: update, check, init-ca, init-cert
+KUBE_ACTION=${KUBE_ACTION:-"update"}
+
+# ----------------------------- Certificates Path Begin -----------------------------
 # set default kubernetes path
 KUBE_PATH=${KUBE_PATH:-"/etc/kubernetes"}
 
@@ -26,6 +33,7 @@ KUBE_PKI_PATH=${KUBE_PATH}/pki
 KUBE_CERT_CA=${KUBE_PKI_PATH}/ca
 KUBE_CERT_APISERVER=${KUBE_PKI_PATH}/apiserver
 KUBE_CERT_APISERVER_KUBELET_CLIENT=${KUBE_PKI_PATH}/apiserver-kubelet-client
+# kubeconfig
 KUBE_CONF_CONTROLLER_MANAGER=${KUBE_PATH}/controller-manager
 KUBE_CONF_SCHEDULER=${KUBE_PATH}/scheduler
 KUBE_CONF_ADMIN=${KUBE_PATH}/admin
@@ -40,6 +48,30 @@ KUBE_ETCD_CERT_SERVER=${KUBE_PKI_PATH}/etcd/server
 KUBE_ETCD_CERT_PEER=${KUBE_PKI_PATH}/etcd/peer
 KUBE_ETCD_CERT_HEALTHCHECK_CLIENT=${KUBE_PKI_PATH}/etcd/healthcheck-client
 KUBE_ETCD_CERT_APISERVER_ETCD_CLIENT=${KUBE_PKI_PATH}/apiserver-etcd-client
+
+KUBE_ETCD_CERT_LIST=(
+  "${KUBE_ETCD_CERT_CA}"
+  "${KUBE_ETCD_CERT_SERVER}"
+  "${KUBE_ETCD_CERT_PEER}"
+  "${KUBE_ETCD_CERT_HEALTHCHECK_CLIENT}"
+  "${KUBE_ETCD_CERT_APISERVER_ETCD_CLIENT}"
+)
+
+KUBE_MASTER_CERT_LIST=(
+  "${KUBE_CERT_CA}"
+  "${KUBE_CERT_APISERVER}"
+  "${KUBE_CERT_APISERVER_KUBELET_CLIENT}"
+  "${KUBE_FRONT_PROXY_CA}"
+  "${KUBE_FRONT_PROXY_CLIENT}"
+)
+
+KUBE_MASTER_CONF_LIST=(
+  "${KUBE_CONF_CONTROLLER_MANAGER}"
+  "${KUBE_CONF_SCHEDULER}"
+  "${KUBE_CONF_ADMIN}"
+  "${KUBE_CONF_KUBELET}"
+)
+# ----------------------------- Certificates Path End -----------------------------
 
 # set output color
 COLOR_NC='\033[0m'
@@ -79,6 +111,46 @@ check_file() {
     log::err "can not find ${file}"
     exit 1
   fi
+}
+
+cert::check_etcd_files() {
+  local cert
+  local conf
+  for cert in "${KUBE_ETCD_CERT_LIST[@]}"; do
+    check_file "${cert}.crt"
+    check_file "${cert}.key"
+  done
+}
+
+cert::check_master_files() {
+  local cert
+  local conf
+  for cert in "${KUBE_MASTER_CERT_LIST[@]}"; do
+    check_file "${cert}.crt"
+    check_file "${cert}.key"
+  done
+  for conf in "${KUBE_MASTER_CONF_LIST[@]}"; do
+    check_file "${conf}.conf"
+  done
+}
+
+cert::check_files() {
+  case ${KUBE_CERT_SCOPE} in
+  etcd)
+    cert::check_etcd_files
+    ;;
+  master)
+    cert::check_master_files
+    ;;
+  all)
+    cert::check_master_files
+    cert::check_etcd_files
+    ;;
+  *)
+    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
+    exit 1
+    ;;
+  esac
 }
 
 # get x509v3 subject alternative name from the old certificate
@@ -133,72 +205,54 @@ cert::check_kubeconfig_expires_date() {
 # check etcd certificates expires information
 cert::check_etcd_certs_expires() {
   local cert
-  local certs
   local name
 
-  certs=(
-    "${KUBE_ETCD_CERT_CA}"
-    "${KUBE_ETCD_CERT_SERVER}"
-    "${KUBE_ETCD_CERT_PEER}"
-    "${KUBE_ETCD_CERT_HEALTHCHECK_CLIENT}"
-    "${KUBE_ETCD_CERT_APISERVER_ETCD_CLIENT}"
-  )
-
-  for cert in "${certs[@]}"; do
+  for cert in "${KUBE_ETCD_CERT_LIST[@]}"; do
     name=${cert##*/}
-    if [[ ! -r ${cert} ]]; then
-      printf "| %-33s | %-27s|\n" "etcd/${name}.crt" "$(cert::get_cert_expires_date "${cert}")"
-    fi
+    printf "| %-33s | %-27s|\n" "etcd/${name}.crt" "$(cert::get_cert_expires_date "${cert}")"
   done
-  printf "| %b | %b|\n" "---------------------------------" "---------------------------"
-
 }
 
 # check master certificates expires information
 cert::check_master_certs_expires() {
-  local certs
-  local kubeconfs
   local cert
   local conf
   local name
 
-  certs=(
-    "${KUBE_CERT_CA}"
-    "${KUBE_CERT_APISERVER}"
-    "${KUBE_CERT_APISERVER_KUBELET_CLIENT}"
-    "${KUBE_FRONT_PROXY_CA}"
-    "${KUBE_FRONT_PROXY_CLIENT}"
-  )
-
-  kubeconfs=(
-    "${KUBE_CONF_CONTROLLER_MANAGER}"
-    "${KUBE_CONF_SCHEDULER}"
-    "${KUBE_CONF_ADMIN}"
-  )
-
-  printf "| %b | %b|\n" "---------------------------------" "---------------------------"
-  printf "| %-33s | %-27s|\n" "CERTIFICATE" "EXPIRES"
-  printf "| %-33s | %-27s|\n" "---------------------------------" "---------------------------"
-
-  for conf in "${kubeconfs[@]}"; do
-    name=${conf##*/}
-    if [[ ! -r ${conf} ]]; then
-      printf "| %-33s | %-27s|\n" "${name}.config" "$(cert::check_kubeconfig_expires_date "${conf}")"
-    fi
+  for cert in "${KUBE_MASTER_CERT_LIST[@]}"; do
+    name=${cert##*/}
+    printf "| %-33s | %-27s|\n" "${name}.crt" "$(cert::get_cert_expires_date "${cert}")"
   done
 
-  for cert in "${certs[@]}"; do
-    if [[ ! -r ${cert} ]]; then
-      name=${cert##*/}
-      printf "| %-33s | %-27s|\n" "${name}.crt" "$(cert::get_cert_expires_date "${cert}")"
-    fi
+  for conf in "${KUBE_MASTER_CONF_LIST[@]}"; do
+    name=${conf##*/}
+    printf "| %-33s | %-27s|\n" "${name}.config" "$(cert::check_kubeconfig_expires_date "${conf}")"
   done
 }
 
-# check all certificates expiration
-cert::check_all_expiration() {
-  cert::check_master_certs_expires
-  cert::check_etcd_certs_expires
+# check all certificates expires
+cert::check_expires() {
+  printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
+  printf "| %-33s | %-27s|\n" "CERTIFICATE" "EXPIRES"
+  printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
+
+  case ${KUBE_CERT_SCOPE} in
+  etcd)
+    cert::check_etcd_certs_expires
+    ;;
+  master)
+    cert::check_master_certs_expires
+    ;;
+  all)
+    cert::check_master_certs_expires
+    cert::check_etcd_certs_expires
+    ;;
+  *)
+    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
+    exit 1
+    ;;
+  esac
+  printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
 }
 
 # generate certificate whit client, server or peer
@@ -314,12 +368,12 @@ cert::update_etcd_cert() {
 
   # restart etcd
   case ${KUBE_CRI} in
-    "docker")
-      docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
-      ;;
-    "containerd")
-      crictl ps | awk '/etcd-/{print$(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
-      ;;
+  "docker")
+    docker ps | awk '/k8s_etcd/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
+    ;;
+  "containerd")
+    crictl ps | awk '/etcd-/{print$(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
+    ;;
   esac
   log::info "restarted etcd with ${KUBE_CRI}"
 }
@@ -344,9 +398,11 @@ cert::update_master_cert() {
 
   # generate kubeconf for controller-manager,scheduler and kubelet
   # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
-  for conf in ${KUBE_CONF_CONTROLLER_MANAGER} ${KUBE_CONF_SCHEDULER} ${KUBE_CONF_ADMIN} ${KUBE_CONF_KUBELET}; do
+  for conf in "${KUBE_MASTER_CONF_LIST[@]}"; do
+
+    # kubelet.conf does not need to update for K8s v1.17+
+    # https://github.com/kubernetes/kubeadm/issues/1753
     if [[ ${conf##*/} == "kubelet" ]]; then
-      # https://github.com/kubernetes/kubeadm/issues/1753
       set +e
       grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf >/dev/null 2>&1
       kubelet_cert_auto_update=$?
@@ -363,16 +419,19 @@ cert::update_master_cert() {
 
     # copy admin.conf to ${HOME}/.kube/config
     if [[ ${conf##*/} == "admin" ]]; then
-      mkdir -p "${HOME}/.kube"
-      local config=${HOME}/.kube/config
-      local config_backup
-      config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
-      if [[ -f ${config} ]] && [[ ! -f ${config_backup} ]]; then
-        cp -fp "${config}" "${config_backup}"
-        log::info "backup ${config} to ${config_backup}"
+      local kubectl_config=${HOME}/.kube/config
+      if [[ -f ${conf}.conf ]]; then
+        local kubectl_config_backup
+        kubectl_config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
+        if [[ ! -f ${kubectl_config_backup} ]]; then
+          cp -fp "${kubectl_config}" "${kubectl_config_backup}"
+          log::info "backup ${kubectl_config} to ${kubectl_config_backup}"
+        fi
+        cp -fp "${conf}.conf" "${HOME}/.kube/config"
+        log::info "copy the admin.conf to ${HOME}/.kube/config"
+      else
+        log::warning "can not find ${conf}.conf"
       fi
-      cp -fp "${conf}.conf" "${HOME}/.kube/config"
-      log::info "copy the admin.conf to ${HOME}/.kube/config"
     fi
   done
 
@@ -385,12 +444,12 @@ cert::update_master_cert() {
   # restart apiserver, controller-manager, scheduler and kubelet
   for item in "apiserver" "controller-manager" "scheduler"; do
     case $KUBE_CRI in
-      "docker")
-        docker ps | awk '/k8s_kube-'${item}'/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
-        ;;
-      "containerd")
-        crictl ps | awk '/kube-'${item}'-/{print $(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
-        ;;
+    "docker")
+      docker ps | awk '/k8s_kube-'${item}'/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
+      ;;
+    "containerd")
+      crictl ps | awk '/kube-'${item}'-/{print $(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
+      ;;
     esac
     log::info "restarted ${item} with ${KUBE_CRI}"
   done
@@ -402,140 +461,120 @@ help() {
   printf "%b\n" "
   Usage: bash update-kubeadm-cert.sh [OPTIONS]
   Options:
-    -c, --cri <docker|containerd>        Set the cri, in order to restart control-plane and etcd service. (default: docker)
-    -s, --scope <all|master|etcd>             Set the scope of the certificate update. (default: all)
-    --only-check                         Check the expiration of the certificates.
-    -h, --help                           Show this help message and exit.
+    -a, --action <update|check|init-ca|init-cert>
+                                    Set the action. (default: update)
+                                      update: update the certificates.
+                                      check: check the expiration of the certificates.
+                                      init-ca: create the ca certificates before kubeadm init cluster.
+                                      init-cert: update the certificates before kubeadm init cluster.
+    -c, --cri <docker|containerd>   Set the cri, in order to restart control-plane and etcd service. (default: docker)
+    -s, --scope <all|master|etcd>   Set the scope of the certificate update. (default: all)
+    -h, --help                      Show this help message and exit.
   "
 }
 
-
 main() {
-  # set default update cert scope: all, master
-  local cert_scope="all"
-  # is check only
-  local is_check_only="false"
-
   # read the options
-  ARGS=$(getopt -n update-kubeadm-cert.sh -a -o c:s:h --long cri:,scope:,only-check:,help: -- "$@")
+  ARGS=$(getopt -n update-kubeadm-cert.sh -a -o a:c:s:h --long action:,cri:,scope:,only-check,help -- "$@")
   eval set -- "$ARGS"
   # extract options and their arguments into variables.
-  while true
-  do
+  while true; do
     case "$1" in
-      -h|--help)
-        help
-        exit 0
-        ;;
-      -c|--cri)
-        # Set the container runtime interface (KUBE_CRI) to use.
-        case "$2" in
-          "docker"|"containerd")
-            KUBE_CRI=$2
-            shift 2
-            ;;
-          *)
-            echo 'Unsupported cri '"$2"'. Valid options are "docker", "containerd".'
-            exit 1
-            ;;
-        esac
-        ;;
-      -s|--scope)
-        # Set the scope of the certificate update.
-        case "$2" in
-          "all"|"master"|"etcd")
-            cert_scope=$2
-            shift 2
-            ;;
-          *)
-            echo 'Unsupported cert scope '"$2"'. Valid options are "docker", "containerd".'
-            exit 1
-            ;;
-        esac
-        ;;
-      --only-check)
-         # Check the expiration of the certificates.
-          is_check_only="true"
-          shift 2
-        ;;
-      --)
-        shift
-        break
+    -a | --action)
+      # Set the action to perform.
+      case "$2" in
+      "update" | "check" | "init-ca" | "init-cert")
+        KUBE_ACTION=$2
+        shift 2
         ;;
       *)
-        echo "Invalid arguments '$1'"
-        help
+        echo 'Unsupported action '"$2"'. Valid options are "update", "check", "init-ca", "init-cert".'
         exit 1
         ;;
+      esac
+      ;;
+    -h | --help)
+      help
+      exit 0
+      ;;
+    -c | --cri)
+      # Set the container runtime interface (KUBE_CRI) to use.
+      case "$2" in
+      "docker" | "containerd")
+        KUBE_CRI=$2
+        shift 2
+        ;;
+      *)
+        echo 'Unsupported cri '"$2"'. Valid options are "docker", "containerd".'
+        exit 1
+        ;;
+      esac
+      ;;
+    -s | --scope)
+      # Set the scope of the certificate update.
+      case "$2" in
+      "all" | "master" | "etcd")
+        KUBE_CERT_SCOPE=$2
+        shift 2
+        ;;
+      *)
+        echo 'Unsupported cert scope '"$2"'. Valid options are "docker", "containerd".'
+        exit 1
+        ;;
+      esac
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      echo "Invalid arguments '$1'"
+      help
+      exit 1
+      ;;
     esac
   done
 
-  # check certificates expiration
+  cert::check_files
 
-  case ${cert_scope} in
-   etcd)
-     # check certificates expiration
-     cert::check_etcd_certs_expires
+  # check certificates expires before update
+  log::info "check certificates expires before update"
+  cert::check_expires
+  if [[ "${KUBE_ACTION}" == "check" ]]; then
+    exit 0
+  fi
 
-     if [[ "${is_check_only}" == "true" ]]; then
-       exit 0
-     fi
+  # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
+  cert::backup_file "${KUBE_PATH}"
 
-     # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-     cert::backup_file "${KUBE_PATH}"
-
-     # update etcd certificates
-     cert::update_etcd_cert
-
-    # check certificates expiration after certificates updated
-     cert::check_etcd_certs_expires
-   ;;
+  # update certificates by different scope
+  case ${KUBE_CERT_SCOPE} in
+  etcd)
+    # update etcd certificates only, does not include master certificates
+    cert::update_etcd_cert
+    ;;
   master)
-    # check certificates expiration
-    cert::check_master_certs_expires
-
-    if [[ "${is_check_only}" == "true" ]]; then
-      exit 0
-    fi
-
-    # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-    cert::backup_file "${KUBE_PATH}"
-
-    log::info "${COLOR_GREEN}updating...${COLOR_NC}"
-    # update master certificates and kubeconf
+    # update master certificates and kubeconf only, does not include etcd
     cert::update_master_cert
-    log::info "${COLOR_GREEN}done!!!${COLOR_NC}"
-
-    # check certificates expiration after certificates updated
-    cert::check_master_certs_expires
     ;;
   all)
-    # check certificates expiration
-    cert::check_all_expiration
+    # update all certificates, including etcd and master
 
-    if [[ "${is_check_only}" == "true" ]]; then
-      exit 0
-    fi
-
-    # backup $KUBE_PATH to $KUBE_PATH.old-$(date +%Y%m%d)
-    cert::backup_file "${KUBE_PATH}"
-
-    # update certificates
-    log::info "${COLOR_GREEN}updating...${COLOR_NC}"
     # update etcd certificates
     cert::update_etcd_cert
     # update master certificates and kubeconf
     cert::update_master_cert
-    log::info "${COLOR_GREEN}done!!!${COLOR_NC}"
-
-    # check certificates expiration after certificates updated
-    cert::check_all_expiration
     ;;
   *)
-    log::err "unknown, unsupported cert type: ${cert_scope}, supported type: \"all\", \"master\""
+    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
     exit 1
     ;;
   esac
+
+  # check certificates expires after update
+  log::info "check certificates expires after update"
+  cert::check_expires
+  log::info "${COLOR_GREEN}DONE!!!${COLOR_NC}enjoy it"
 }
 
 # call the main function with all command-line arguments
