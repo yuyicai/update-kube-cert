@@ -420,7 +420,7 @@ cert::update_master_cert() {
     # copy admin.conf to ${HOME}/.kube/config
     if [[ ${conf##*/} == "admin" ]]; then
       local kubectl_config=${HOME}/.kube/config
-      if [[ -f ${conf}.conf ]]; then
+      if [[ -f ${kubectl_config} ]]; then
         local kubectl_config_backup
         kubectl_config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
         if [[ ! -f ${kubectl_config_backup} ]]; then
@@ -430,7 +430,7 @@ cert::update_master_cert() {
         cp -fp "${conf}.conf" "${HOME}/.kube/config"
         log::info "copy the admin.conf to ${HOME}/.kube/config"
       else
-        log::warning "can not find ${conf}.conf"
+        log::warning "can not find ${kubectl_config}"
       fi
     fi
   done
@@ -462,14 +462,16 @@ help() {
   Usage: bash update-kubeadm-cert.sh [OPTIONS]
   Options:
     -a, --action <update|check|init-ca|init-cert>
-                                    Set the action. (default: update)
-                                      update: update the certificates.
-                                      check: check the expiration of the certificates.
-                                      init-ca: create the ca certificates before kubeadm init cluster.
-                                      init-cert: update the certificates before kubeadm init cluster.
-    -c, --cri <docker|containerd>   Set the cri, in order to restart control-plane and etcd service. (default: docker)
-    -s, --scope <all|master|etcd>   Set the scope of the certificate update. (default: all)
-    -h, --help                      Show this help message and exit.
+                  Set the action type. (default: update)
+                    update: update the certificates.
+                    check: check the expiration of the certificates.
+                    init-ca: create the ca certificates before kubeadm init cluster.
+                    init-cert: update the certificates before kubeadm init cluster.
+    -c, --cri <docker|containerd>
+                  Set the cri type, in order to restart control-plane and etcd service. (default: docker)
+    -s, --scope <all|master|etcd>
+                  Set the scope of the certificate updated. (default: all)
+    -h, --help    Show this help message and exit.
   "
 }
 
