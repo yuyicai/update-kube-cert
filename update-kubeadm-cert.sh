@@ -117,12 +117,21 @@ cert::check_master_certs_expiration() {
     "${FRONT_PROXY_CLIENT}"
   )
 
-  kubeconfs=(
-    "${CONF_CONTROLLER_MANAGER}"
-    "${CONF_SCHEDULER}"
-    "${CONF_ADMIN}"
-    "${CONF_SUPER_ADMIN}"
-  )
+  # add support for super_admin.conf, which was added after k8s v1.30.
+  if [ -f "${CONF_SUPER_ADMIN}.conf" ]; then
+    kubeconfs=(
+      "${CONF_CONTROLLER_MANAGER}"
+      "${CONF_SCHEDULER}"
+      "${CONF_ADMIN}"
+      "${CONF_SUPER_ADMIN}"
+    )
+  else 
+    kubeconfs=(
+      "${CONF_CONTROLLER_MANAGER}"
+      "${CONF_SCHEDULER}"
+      "${CONF_ADMIN}"
+    )
+  fi
 
   printf "%-50s%-30s\n" "CERTIFICATE" "EXPIRES"
 
@@ -280,8 +289,15 @@ cert::update_master_cert() {
   log::info "${GREEN}updated ${BLUE}${CERT_APISERVER_KUBELET_CLIENT}.crt${NC}"
 
   # generate kubeconf for controller-manager,scheduler and kubelet
-  # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
-  for conf in ${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET} ${CONF_SUPER_ADMIN}; do
+  # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf,super_admin(added after k8s v1.30.)
+
+  if [ -f "${CONF_SUPER_ADMIN}.conf" ]; then
+    conf_list="${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET} ${CONF_SUPER_ADMIN}"
+  else 
+    conf_list="${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET}"
+  fi
+  
+  for conf in ${conf_list}; do
     if [[ ${conf##*/} == "kubelet" ]]; then
       # https://github.com/kubernetes/kubeadm/issues/1753
       set +e
