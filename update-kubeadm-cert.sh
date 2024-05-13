@@ -121,6 +121,7 @@ cert::check_master_certs_expiration() {
     "${CONF_CONTROLLER_MANAGER}"
     "${CONF_SCHEDULER}"
     "${CONF_ADMIN}"
+    "${CONF_SUPER_ADMIN}"
   )
 
   printf "%-50s%-30s\n" "CERTIFICATE" "EXPIRES"
@@ -280,7 +281,7 @@ cert::update_master_cert() {
 
   # generate kubeconf for controller-manager,scheduler and kubelet
   # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
-  for conf in ${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET}; do
+  for conf in ${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET} ${CONF_SUPER_ADMIN}; do
     if [[ ${conf##*/} == "kubelet" ]]; then
       # https://github.com/kubernetes/kubeadm/issues/1753
       set +e
@@ -380,6 +381,7 @@ main() {
   CONF_CONTROLLER_MANAGER=${KUBE_PATH}/controller-manager
   CONF_SCHEDULER=${KUBE_PATH}/scheduler
   CONF_ADMIN=${KUBE_PATH}/admin
+  CONF_SUPER_ADMIN=${KUBE_PATH}/super-admin
   CONF_KUBELET=${KUBE_PATH}/kubelet
   # front-proxy
   FRONT_PROXY_CA=${PKI_PATH}/front-proxy-ca
@@ -434,6 +436,7 @@ main() {
     '\033[32m./update-kubeadm-cert.sh all\033[0m' update all etcd certificates, master certificates and kubeconf
       /etc/kubernetes
       ├── admin.conf
+      ├── super-admin.conf
       ├── controller-manager.conf
       ├── scheduler.conf
       ├── kubelet.conf
@@ -450,6 +453,7 @@ main() {
     '\033[32m./update-kubeadm-cert.sh master\033[0m' update only master certificates and kubeconf
       /etc/kubernetes
       ├── admin.conf
+      ├── super-admin.conf
       ├── controller-manager.conf
       ├── scheduler.conf
       ├── kubelet.conf
