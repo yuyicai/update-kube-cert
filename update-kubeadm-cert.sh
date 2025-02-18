@@ -625,7 +625,10 @@ main() {
 
   # update, check, init-ca, init-cert action switch by ${KUBE_ACTION}
   cert::action
-  log::info "${COLOR_GREEN}DONE!!!${COLOR_NC}enjoy it"
+
+  if [[ "${KUBE_ACTION}" == "update" || "${KUBE_ACTION}" == "init-cert" ]]; then
+    log::info "${COLOR_GREEN}DONE!!!${COLOR_NC}enjoy it"
+  fi
 }
 
 # call the main function with all command-line arguments
