@@ -25,8 +25,6 @@ KUBE_CERT_DAYS=${KUBE_CERT_DAYS:-3650}
 # action: update, check, init-ca, update-cert-before-init
 KUBE_ACTION=${KUBE_ACTION:-"update"}
 
-
-
 # ----------------------------- Certificates Path Begin -----------------------------
 # set default kubernetes path
 KUBE_PATH=${KUBE_PATH:-"/etc/kubernetes"}
@@ -77,7 +75,8 @@ KUBE_MASTER_CONF_LIST=(
 )
 # ----------------------------- Certificates Path End -----------------------------
 
-# restart kubelet, apiserver, controller-manager, scheduler, etcd after update certificates
+# Determines if the kubelet, apiserver, controller-manager, scheduler, etcd should be restarted after update certificates
+# Set to false if you want to restart manually
 KUBE_RESTART_SERVICES=true
 
 # set output color
@@ -113,32 +112,36 @@ log::debug() {
 }
 
 # get x509v3 subject alternative name from the old certificate
+# like: DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, DNS:some.domain.com, IP:x.x.x.x
 cert::get_subject_alt_name() {
   local cert_file_path=${1}.crt
   local alt_name
-
   alt_name=$(openssl x509 -text -noout -in "${cert_file_path}" | grep -A1 'Alternative' | tail -n1 | sed 's/[[:space:]]*Address//g' | sed 's/^[[:space:]]*//')
   printf "%s\n" "${alt_name}"
 
 }
 
 # get subject from the old certificate
+# like: /CN=kube-apiserver
 cert::get_subj() {
   local cert_file_path=${1}.crt
   local subj
-
   subj=$(openssl x509 -text -noout -in "${cert_file_path}" | grep "Subject:" | sed 's/Subject:/\//g;s/\,/\//;s/[[:space:]]//g')
   printf "%s\n" "${subj}"
 }
 
 # generate certificate whit client, server or peer
 # Args:
-#   $1 (the path of certificate, without suffix, example: /etc/kubernetes/pki/apiserver)
-#   $2 (the type of certificate, must be one of client, server, peer)
+#   $1 (the path of certificate, without suffix.
+#       example: /etc/kubernetes/pki/apiserver)
+#   $2 (the type of certificate, must be one of 'client', 'server', 'peer')
 #   $3 (the subject of certificate)
 #   $4 (the validity of certificate) (days)
-#   $5 (the path of ca, without suffix, example: /etc/kubernetes/pki/ca)
-#   $6 (the x509v3 subject alternative name of certificate when the type of certificate is server or peer)
+#   $5 (the path of ca, without suffix.
+#       example: /etc/kubernetes/pki/ca)
+#   $6 (the x509v3 subject alternative name of certificate.
+#       This option is required when the type of certificate is 'server' or 'peer'.
+#       example: "DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, DNS:some.domain.com, IP:10.96.0.1, IP:10.0.0.185")
 cert::gen_cert() {
   local cert_file_path=${1}.crt
   local key_file_path=${1}.key
@@ -152,19 +155,19 @@ cert::gen_cert() {
   local cert_name=${cert_file_path##*/}
   local common_csr_conf='distinguished_name = dn\n[dn]\n[v3_ext]\nkeyUsage = critical, digitalSignature, keyEncipherment\n'
 
+  # check x509v3 subject alternative name when the type of certificate is 'server' or 'peer'
   if [[ "${cert_type}" == "server" || "${cert_type}" == "peer" ]]; then
     if [[ -z "${alt_name}" ]]; then
-      log::err "x509v3 subject alternative name is required when the type of certificate is server or peer"
+      log::err "x509v3 subject alternative name is required when the type of certificate is 'server' or 'peer'"
       exit 1
     fi
     log::debug "[${cert_name}] x509v3 subject alternative name: ${alt_name}"
   fi
-
   log::debug "[${cert_name}] subject: ${subj}"
 
+  # set the extended key usage for the certificate with different types
   case "${cert_type}" in
-  client)
-    csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
+  client)csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
     ;;
   server)
     csr_conf=$(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
@@ -185,11 +188,13 @@ cert::gen_cert() {
     -out "${csr_file_path}" >/dev/null 2>&1
   # gen cert
   log::debug "[${cert_name}] generate cert"
-  openssl x509 -in "${csr_file_path}" -req -CA "${ca_cert_file_path}" -CAkey "${ca_key_file_path}" -CAcreateserial -extensions v3_ext \
+  openssl x509 -in "${csr_file_path}" -req \
+    -CA "${ca_cert_file_path}" -CAkey "${ca_key_file_path}" -CAcreateserial -extensions v3_ext \
     -extfile <(printf "%b" "${csr_conf}") \
     -days "${cert_days}" -out "${cert_file_path}" >/dev/null 2>&1
 
   log::debug "[${cert_name}] remove csr"
+  # remove csr
   rm -f "${csr_file_path}"
 }
 
@@ -201,19 +206,21 @@ cert::update_kubeconf() {
   local subj
   local cert_base64
 
-  # get the key from the old kubeconf
+  # get the key file from the old kubeconf
   grep "client-key-data" "${kubeconf_file_path}" | awk '{print$2}' | base64 -d >"${key_file_path}"
-  # get the old certificate from the old kubeconf
+  # get the old certificate file from the old kubeconf
   grep "client-certificate-data" "${kubeconf_file_path}" | awk '{print$2}' | base64 -d >"${cert_file_path}"
   # get subject from the old certificate
   subj=$(cert::get_subj "${cert_path_without_suffix}")
+  # generate new certificate
   cert::gen_cert "${cert_path_without_suffix}" "client" "${subj}" "${KUBE_CERT_DAYS}" "${KUBE_CERT_CA}"
-  # get certificate base64 code
+  # convert the new certificate to base64 code
   cert_base64=$(base64 -w 0 "${cert_file_path}")
 
-  # set certificate base64 code to kubeconf
+  # set new certificate base64 code to kubeconf
   sed -i 's/client-certificate-data:.*/client-certificate-data: '"${cert_base64}"'/g' "${kubeconf_file_path}"
 
+  # remove certificate, key file after set kubeconf
   rm -f "${cert_file_path}"
   rm -f "${key_file_path}"
 }
@@ -223,7 +230,7 @@ cert::update_etcd_cert() {
   local subject_alt_name
   local cert
 
-  # generate etcd server,peer certificate
+  # generate new etcd server, peer certificate
   # /etc/kubernetes/pki/etcd/server
   # /etc/kubernetes/pki/etcd/peer
   for cert in ${KUBE_ETCD_CERT_SERVER} ${KUBE_ETCD_CERT_PEER}; do
@@ -233,7 +240,7 @@ cert::update_etcd_cert() {
     log::info "updated ${COLOR_BLUE}${cert}.conf${COLOR_NC}"
   done
 
-  # generate etcd healthcheck-client,apiserver-etcd-client certificate
+  # generate new etcd healthcheck-client, apiserver-etcd-client certificate
   # /etc/kubernetes/pki/etcd/healthcheck-client
   # /etc/kubernetes/pki/apiserver-etcd-client
   for cert in ${KUBE_ETCD_CERT_HEALTHCHECK_CLIENT} ${KUBE_ETCD_CERT_APISERVER_ETCD_CLIENT}; do
@@ -242,7 +249,7 @@ cert::update_etcd_cert() {
     log::info "updated ${COLOR_BLUE}${cert}.conf${COLOR_NC}"
   done
 
-  # restart etcd
+  # restart etcd pod if needed
   if [[ "${KUBE_RESTART_SERVICES}" == "true" ]]; then
     set +e
     case ${KUBE_CRI} in
@@ -256,7 +263,7 @@ cert::update_etcd_cert() {
     is_etcd_restarted=$?
     set -e
     if [[ "${is_etcd_restarted}" != "0" ]]; then
-      log::warning "failed to restart etcd with ${KUBE_CRI}, please restart etcd manually"
+      log::warning "failed to restart etcd with ${KUBE_CRI}, please restart etcd pod manually"
     else
       log::info "restarted etcd with ${KUBE_CRI}"
     fi
@@ -268,20 +275,20 @@ cert::update_master_cert() {
   local subject_alt_name
   local conf
 
-  # generate apiserver server certificate
+  # generate new apiserver server certificate
   # /etc/kubernetes/pki/apiserver
   subj=$(cert::get_subj "${KUBE_CERT_APISERVER}")
   subject_alt_name=$(cert::get_subject_alt_name "${KUBE_CERT_APISERVER}")
   cert::gen_cert "${KUBE_CERT_APISERVER}" "server" "${subj}" "${KUBE_CERT_DAYS}" "${KUBE_CERT_CA}" "${subject_alt_name}"
   log::info "updated ${COLOR_BLUE}${KUBE_CERT_APISERVER}.crt${COLOR_NC}"
 
-  # generate apiserver-kubelet-client certificate
+  # generate new apiserver-kubelet-client certificate
   # /etc/kubernetes/pki/apiserver-kubelet-client
   subj=$(cert::get_subj "${KUBE_CERT_APISERVER_KUBELET_CLIENT}")
   cert::gen_cert "${KUBE_CERT_APISERVER_KUBELET_CLIENT}" "client" "${subj}" "${KUBE_CERT_DAYS}" "${KUBE_CERT_CA}"
   log::info "updated ${COLOR_BLUE}${KUBE_CERT_APISERVER_KUBELET_CLIENT}.crt${COLOR_NC}"
 
-  # generate kubeconf for controller-manager,scheduler and kubelet
+  # generate new kubeconf for controller-manager,scheduler and kubelet
   # /etc/kubernetes/controller-manager,scheduler,admin,kubelet.conf
   for conf in "${KUBE_MASTER_CONF_LIST[@]}"; do
 
@@ -289,6 +296,7 @@ cert::update_master_cert() {
     # https://github.com/kubernetes/kubeadm/issues/1753
     if [[ ${conf##*/} == "kubelet" ]]; then
       set +e
+      # if the kubelet.conf contains kubelet-client-current.pem, it does not need to update
       grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf >/dev/null 2>&1
       kubelet_cert_auto_update=$?
       set -e
@@ -302,31 +310,32 @@ cert::update_master_cert() {
     cert::update_kubeconf "${conf}"
     log::info "updated ${COLOR_BLUE}${conf}.conf${COLOR_NC}"
 
-    # copy admin.conf to ${HOME}/.kube/config
+    # copy admin.conf to ${HOME}/.kube/config if the kubeconf is admin.conf and ${HOME}/.kube/config exists
     if [[ ${conf##*/} == "admin" ]]; then
       local kubectl_config=${HOME}/.kube/config
       if [[ -f ${kubectl_config} ]]; then
         local kubectl_config_backup
         kubectl_config_backup=${HOME}/.kube/config.old-$(date +%Y%m%d)
         if [[ ! -f ${kubectl_config_backup} ]]; then
+          # backup ${HOME}/.kube/config to ${HOME}/.kube/config.old-$(date +%Y%m%d)
           cp -fp "${kubectl_config}" "${kubectl_config_backup}"
           log::info "backup ${kubectl_config} to ${kubectl_config_backup}"
         fi
         cp -fp "${conf}.conf" "${HOME}/.kube/config"
         log::info "copy the admin.conf to ${HOME}/.kube/config"
       else
-        log::warning "can not find ${kubectl_config}"
+        log::warning "can not find ${kubectl_config}, please copy ${conf}.conf to ${kubectl_config} manually"
       fi
     fi
   done
 
-  # generate front-proxy-client certificate
+  # generate new front-proxy-client certificate
   # /etc/kubernetes/pki/front-proxy-client
   subj=$(cert::get_subj "${KUBE_FRONT_PROXY_CLIENT}")
   cert::gen_cert "${KUBE_FRONT_PROXY_CLIENT}" "client" "${subj}" "${KUBE_CERT_DAYS}" "${KUBE_FRONT_PROXY_CA}"
   log::info "updated ${COLOR_BLUE}${KUBE_FRONT_PROXY_CLIENT}.crt${COLOR_NC}"
 
-  # restart apiserver, controller-manager, scheduler and kubelet
+  # restart apiserver, controller-manager, scheduler and kubelet if needed
   if [[ "${KUBE_RESTART_SERVICES}" == "true" ]]; then
     for item in "apiserver" "controller-manager" "scheduler"; do
       set +e
@@ -502,6 +511,7 @@ cert::action() {
 help() {
   printf "%b\n" "
   Usage: bash update-kubeadm-cert.sh [OPTIONS]
+  Example: bash update-kubeadm-cert.sh -a update -c docker
   Options:
     -a, --action <update|check|init-ca|update-cert-before-init>
                   Set the action type. (default: update)
@@ -511,8 +521,6 @@ help() {
                     update-cert-before-init: update the certificates before kubeadm init cluster. (must create certificates before init by <kubeadm init certs>)
     -c, --cri <docker|containerd>
                   Set the cri type, in order to restart control-plane and etcd service. (default: docker)
-    -s, --scope <all|master|etcd>
-                  Set the scope of the certificate updated. (default: all)
     -h, --help    Show this help message and exit.
   "
 }
@@ -566,7 +574,7 @@ main() {
     esac
   done
 
-  # update, check, init-ca, update-cert-before-init action switch by ${KUBE_ACTION}
+  # update or check, init-ca, update-cert-before-init action switch by ${KUBE_ACTION}
   cert::action
 
   if [[ "${KUBE_ACTION}" == "update" || "${KUBE_ACTION}" == "update-cert-before-init" ]]; then
