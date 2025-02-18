@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# MIT License
+#
+# The full license can be found at:
+# https://github.com/yuyicai/update-kube-cert/blob/master/LICENSE
+
 set -o errexit
 set -o pipefail
 # set -o xtrace
@@ -17,11 +22,10 @@ KUBE_CRI=${KUBE_CRI:-"docker"}
 # set default certificate expiration days
 KUBE_CERT_DAYS=${KUBE_CERT_DAYS:-3650}
 
-# cert update scope, etcd, master, all
-KUBE_CERT_SCOPE=${KUBE_CERT_SCOPE:-"all"}
-
-# action: update, check, init-ca, init-cert
+# action: update, check, init-ca, update-cert-before-init
 KUBE_ACTION=${KUBE_ACTION:-"update"}
+
+
 
 # ----------------------------- Certificates Path Begin -----------------------------
 # set default kubernetes path
@@ -355,29 +359,10 @@ cert::update_master_cert() {
 }
 
 cert::update() {
-  # update certificates by different scope
-  case ${KUBE_CERT_SCOPE} in
-  "etcd")
-    # update etcd certificates only, does not include master certificates
-    cert::update_etcd_cert
-    ;;
-  "master")
-    # update master certificates and kubeconf only, does not include etcd
-    cert::update_master_cert
-    ;;
-  "all")
-    # update all certificates, including etcd and master
-
-    # update etcd certificates
-    cert::update_etcd_cert
-    # update master certificates and kubeconf
-    cert::update_master_cert
-    ;;
-  *)
-    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
-    exit 1
-    ;;
-  esac
+  # update etcd certificates
+  cert::update_etcd_cert
+  # update master certificates and kubeconf
+  cert::update_master_cert
 }
 
 # get certificate expires date
@@ -433,23 +418,8 @@ cert::check_expires() {
   printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
   printf "| %-33s | %-27s|\n" "CERTIFICATE" "EXPIRES"
   printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
-
-  case ${KUBE_CERT_SCOPE} in
-  "etcd")
-    cert::check_etcd_certs_expires
-    ;;
-  "master")
-    cert::check_master_certs_expires
-    ;;
-  "all")
-    cert::check_master_certs_expires
-    cert::check_etcd_certs_expires
-    ;;
-  *)
-    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
-    exit 1
-    ;;
-  esac
+  cert::check_master_certs_expires
+  cert::check_etcd_certs_expires
   printf "|%b|%b|\n" "-----------------------------------" "----------------------------"
 }
 
@@ -495,25 +465,11 @@ cert::check_master_files_existed() {
 
 # make sure the certificates are existed
 cert::check_files_existed() {
-  case ${KUBE_CERT_SCOPE} in
-  etcd)
-    cert::check_etcd_files_existed
-    ;;
-  master)
-    cert::check_master_files_existed
-    ;;
-  all)
-    cert::check_master_files_existed
-    cert::check_etcd_files_existed
-    ;;
-  *)
-    log::err "unknown, unsupported cert type: ${KUBE_CERT_SCOPE}, supported type: \"all\", \"master\""
-    exit 1
-    ;;
-  esac
+  cert::check_master_files_existed
+  cert::check_etcd_files_existed
 }
 
-# update, check, init-ca, init-cert action switch by ${KUBE_ACTION}
+# update, check, init-ca, update-cert-before-init action switch by ${KUBE_ACTION}
 cert::action() {
   case ${KUBE_ACTION} in
   "update")
@@ -530,14 +486,14 @@ cert::action() {
   "init-ca")
     cert::init_ca
     ;;
-  "init-cert")
+  "update-cert-before-init")
     # init cert does not need to restart services
     KUBE_RESTART_SERVICES=false
     cert::update
     cert::check_expires
     ;;
   *)
-    log::err "unknown, unsupported action: ${KUBE_ACTION}, supported action: update, check, init-ca, init-cert"
+    log::err "unknown, unsupported action: ${KUBE_ACTION}, supported action: update, check, init-ca, update-cert-before-init"
     exit 1
     ;;
   esac
@@ -547,12 +503,12 @@ help() {
   printf "%b\n" "
   Usage: bash update-kubeadm-cert.sh [OPTIONS]
   Options:
-    -a, --action <update|check|init-ca|init-cert>
+    -a, --action <update|check|init-ca|update-cert-before-init>
                   Set the action type. (default: update)
                     update: update the certificates.
                     check: check the expiration of the certificates.
-                    init-ca: create the ca certificates before kubeadm init cluster.
-                    init-cert: update the certificates before kubeadm init cluster.
+                    init-ca: generate CA more than 10 years ago before kubeadm init cluster.
+                    update-cert-before-init: update the certificates before kubeadm init cluster. (must create certificates before init by <kubeadm init certs>)
     -c, --cri <docker|containerd>
                   Set the cri type, in order to restart control-plane and etcd service. (default: docker)
     -s, --scope <all|master|etcd>
@@ -563,7 +519,7 @@ help() {
 
 main() {
   # read the options
-  ARGS=$(getopt -n update-kubeadm-cert.sh -a -o a:c:s:h --long action:,cri:,scope:,only-check,help -- "$@")
+  ARGS=$(getopt -n update-kubeadm-cert.sh -a -o a:c:h --long action:,cri:,only-check,help -- "$@")
   eval set -- "$ARGS"
   # extract options and their arguments into variables.
   while true; do
@@ -571,12 +527,12 @@ main() {
     -a | --action)
       # Set the action to perform.
       case "$2" in
-      "update" | "check" | "init-ca" | "init-cert")
+      "update" | "check" | "init-ca" | "update-cert-before-init")
         KUBE_ACTION=$2
         shift 2
         ;;
       *)
-        echo 'Unsupported action '"$2"'. Valid options are "update", "check", "init-ca", "init-cert".'
+        echo 'Unsupported action '"$2"'. Valid options are "update", "check", "init-ca", "update-cert-before-init".'
         exit 1
         ;;
       esac
@@ -598,19 +554,6 @@ main() {
         ;;
       esac
       ;;
-    -s | --scope)
-      # Set the scope of the certificate update.
-      case "$2" in
-      "all" | "master" | "etcd")
-        KUBE_CERT_SCOPE=$2
-        shift 2
-        ;;
-      *)
-        echo 'Unsupported cert scope '"$2"'. Valid options are "docker", "containerd".'
-        exit 1
-        ;;
-      esac
-      ;;
     --)
       shift
       break
@@ -623,10 +566,10 @@ main() {
     esac
   done
 
-  # update, check, init-ca, init-cert action switch by ${KUBE_ACTION}
+  # update, check, init-ca, update-cert-before-init action switch by ${KUBE_ACTION}
   cert::action
 
-  if [[ "${KUBE_ACTION}" == "update" || "${KUBE_ACTION}" == "init-cert" ]]; then
+  if [[ "${KUBE_ACTION}" == "update" || "${KUBE_ACTION}" == "update-cert-before-init" ]]; then
     log::info "${COLOR_GREEN}DONE!!!${COLOR_NC}enjoy it"
   fi
 }
