@@ -18,7 +18,7 @@
 # GitHub: https://github.com/yuyicai/update-kube-cert
 
 # version of the script
-VERSION="v2.0.0"
+VERSION="v2.1.0"
 
 set -o errexit
 set -o pipefail
@@ -38,6 +38,9 @@ KUBE_CERT_DAYS=${KUBE_CERT_DAYS:-3650}
 
 # set default CA expiration days
 KUBE_CA_DAYS=${KUBE_CA_DAYS:-36500}
+
+# skip update etcd certs
+KUBE_SKIP_ETCD_CERTS=${KUBE_SKIP_ETCD_CERTS:-"false"}
 
 # ----------------------------- Certificates Path Begin -----------------------------
 # set default kubernetes path
@@ -495,16 +498,33 @@ check_file() {
     log_err "insufficient permissions for ${file}"
     exit 1
   fi
+  log_info "found file: ${file}"
 }
 
-# make sure the certificates are existed
-cert_check_files_existed() {
+# make sure the etcd certificates are existed
+cert_check_etcd_files_existed() {
   local cert
   local conf
-  local cert_lists=("${KUBE_ETCD_CERT_LIST[@]}" "${KUBE_MASTER_CERT_LIST[@]}")
 
   # Check all certificate files
-  for cert in "${cert_lists[@]}"; do
+  for cert in "${KUBE_ETCD_CERT_LIST[@]}"; do
+    check_file "${cert}.crt"
+    check_file "${cert}.key"
+  done
+
+  # Check all kubeconfig files
+  for conf in "${KUBE_MASTER_CONF_LIST[@]}"; do
+    check_file "${conf}.conf"
+  done
+}
+
+# make sure the master certificates are existed
+cert_check_master_files_existed() {
+  local cert
+  local conf
+
+  # Check all certificate files
+  for cert in "${KUBE_MASTER_CERT_LIST[@]}"; do
     check_file "${cert}.crt"
     check_file "${cert}.key"
   done
@@ -690,7 +710,14 @@ main() {
 
   # make sure the certificates are existed
   log_info "checking if all certificate files are existed..."
-  cert_check_files_existed
+  if [[ "${KUBE_SKIP_ETCD_CERTS}" != "true" ]]; then
+    cert_check_etcd_files_existed
+  else
+    log_info "skipping etcd certificates check"
+  fi
+  cert_check_master_files_existed
+  log_info "all certificate files are existed"
+
   # backup kubernetes files
   cert_backup_kube_file
   # check expires before updating the certificates
@@ -699,8 +726,16 @@ main() {
 
   # update certificates 10 years for existing clusters
   log_info "updating certificates with ${KUBE_CERT_DAYS} days expiration..."
-  # update etcd certificates
-  cert_update_etcd_cert
+
+  # etcd
+  if [[ "${KUBE_SKIP_ETCD_CERTS}" != "true" ]]; then
+    # update etcd certificates
+    cert_update_etcd_cert
+  else
+    log_info "skipping etcd certificates update"
+  fi
+
+  # master
   # update master certificates and kubeconf
   cert_update_master_cert
 
