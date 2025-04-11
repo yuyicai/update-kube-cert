@@ -459,5 +459,14 @@ kubeconfig files:
   There might be a brief disruption while control plane components restart with new certificates.  
   But on multi-master clusters, the disruption should be minimal.
 
+- **How can I skip etcd certificate update?**  
+  You can use the env `KUBE_SKIP_ETCD_CERTS` to skip etcd certificate update.  
+  ```bash
+  # just update kubernetes master certificates, not etcd
+  export KUBE_SKIP_ETCD_CERTS=true
+  bash update-kubeadm-cert.sh --cri containerd
+  ```
+
+
 ## License
 MIT License
