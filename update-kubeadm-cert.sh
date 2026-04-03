@@ -359,7 +359,7 @@ restart_control_plane() {
       set +e
       case ${KUBE_CRI} in
       "docker")
-        docker ps 2>/dev/null | awk "k8s_kube-${item}" | awk '{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1
+        docker ps 2>/dev/null | grep "k8s_kube-${item}" | awk '{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1
         ;;
       "containerd")
         crictl --runtime-endpoint unix:///run/containerd/containerd.sock pods | grep "kube-${item}-" | awk '{print $1}' | xargs -r -I '{}' crictl --runtime-endpoint unix:///run/containerd/containerd.sock stopp {} >/dev/null 2>&1
